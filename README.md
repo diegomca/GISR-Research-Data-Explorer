@@ -5,7 +5,13 @@ This repository contains a static dashboard for exploring GISR (General Influenc
 - Independent Cascade (`IC`)
 - Linear Threshold (`LT`)
 
-The site is designed to be published with GitHub Pages and to serve as a companion visualization for the manuscript *Relación entre estructuras de red y su capacidad de dispersión de influencias*.
+The site is designed to be published with GitHub Pages and to serve as a companion visualization for the manuscript _Relación entre estructuras de red y su capacidad de dispersión de influencias_.
+
+Article: ...
+
+DOI: ....
+
+Website: https://diegomonsalves.github.io/GISR-Research-Data-Explorer/
 
 ## What the dashboard shows
 
@@ -92,14 +98,3 @@ python3 -m http.server 8000
 ```
 
 Then open `http://localhost:8000`.
-
-## GitHub Pages
-
-This project is ready for a simple GitHub Pages deployment because it is fully static.
-
-Recommended publication steps:
-
-1. Push the repository to GitHub.
-2. In the repository settings, enable GitHub Pages from the main branch root.
-3. Wait for the Pages build to finish.
-4. Use the resulting URL in the paper, repository description, or supplemental material.
