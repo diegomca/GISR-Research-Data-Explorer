@@ -12,6 +12,71 @@
     <style>
         body { font-family: 'Source Sans 3', sans-serif; }
         h1, h2, h3 { font-family: 'Source Serif 4', serif; }
+        .chart-note {
+            position: absolute;
+            min-width: 90px;
+            max-width: 360px;
+            pointer-events: auto;
+            user-select: none;
+        }
+        .chart-note-inner {
+            position: relative;
+            display: inline-block;
+            min-width: 56px;
+            min-height: 32px;
+            padding: 2px 4px;
+            border-radius: 12px;
+        }
+        .chart-note-body {
+            min-height: 28px;
+            color: #0f172a;
+            font-size: 16px;
+            line-height: 1.35;
+            outline: none;
+            white-space: pre-wrap;
+            word-break: break-word;
+            user-select: text;
+        }
+        .chart-note.selected .chart-note-inner {
+            outline: 2px dashed rgba(14, 165, 233, 0.8);
+            background: rgba(255, 255, 255, 0.72);
+        }
+        .chart-note-handle {
+            position: absolute;
+            top: -14px;
+            left: -10px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            width: 22px;
+            height: 22px;
+            border: 1px solid rgba(15, 23, 42, 0.18);
+            border-radius: 999px;
+            background: #ffffff;
+            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.12);
+            cursor: pointer;
+            color: #334155;
+            font-size: 12px;
+            line-height: 1;
+        }
+        .chart-note.selected .chart-note-handle {
+            display: inline-flex;
+        }
+        .note-style-btn.active {
+            background: #0f172a;
+            color: #ffffff;
+            border-color: #0f172a;
+        }
+        .annotation-mode {
+            cursor: crosshair;
+        }
+        #chartPanel:fullscreen {
+            padding: 24px;
+            background: #ffffff;
+        }
+        #chartPanel:fullscreen #chartViewport {
+            height: calc(100vh - 240px);
+        }
     </style>
 </head>
 <body class="min-h-screen bg-slate-100 text-slate-900">
@@ -97,7 +162,7 @@
             </aside>
 
             <section class="xl:col-span-9">
-                <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div id="chartPanel" class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                     <div class="mb-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                         <div>
                             <h2 class="text-2xl font-semibold text-slate-950">Growth Curves</h2>
@@ -110,9 +175,95 @@
                         </p>
                     </div>
 
-                    <div class="h-[860px]">
-                        <div class="relative h-full w-full">
+                    <div class="mb-4 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div class="flex flex-wrap gap-2">
+                            <button id="fullscreenBtn" type="button" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700">
+                                Full screen
+                            </button>
+                            <button id="exportBtn" type="button" class="rounded-xl bg-sky-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-800">
+                                Export PNG
+                            </button>
+                            <button id="addNoteBtn" type="button" class="rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-amber-400">
+                                Add note
+                            </button>
+                            <button id="clearNotesBtn" type="button" class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100">
+                                Clear notes
+                            </button>
+                        </div>
+
+                        <div class="grid grid-cols-1 gap-3 lg:grid-cols-3">
+                            <div class="rounded-xl bg-white p-3 shadow-sm">
+                                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Axis numbers</p>
+                                <div class="mt-2 flex items-center gap-2">
+                                    <button id="tickSizeDecrease" type="button" class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-100">A-</button>
+                                    <span id="tickSizeValue" class="min-w-12 text-center text-sm font-semibold text-slate-900">14 px</span>
+                                    <button id="tickSizeIncrease" type="button" class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-100">A+</button>
+                                </div>
+                            </div>
+
+                            <div class="rounded-xl bg-white p-3 shadow-sm">
+                                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Axis titles</p>
+                                <div class="mt-2 flex items-center gap-2">
+                                    <button id="axisTitleDecrease" type="button" class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-100">A-</button>
+                                    <span id="axisTitleValue" class="min-w-12 text-center text-sm font-semibold text-slate-900">18 px</span>
+                                    <button id="axisTitleIncrease" type="button" class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-100">A+</button>
+                                </div>
+                            </div>
+
+                            <div class="rounded-xl bg-white p-3 shadow-sm">
+                                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Curve thickness</p>
+                                <div class="mt-2 flex items-center gap-2">
+                                    <button id="lineWidthDecrease" type="button" class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-100">-</button>
+                                    <span id="lineWidthValue" class="min-w-12 text-center text-sm font-semibold text-slate-900">1.6 px</span>
+                                    <button id="lineWidthIncrease" type="button" class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-100">+</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="noteStylePanel" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-3 shadow-sm">
+                            <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <button id="noteNormalBtn" type="button" class="note-style-btn rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-100">
+                                        Normal
+                                    </button>
+                                    <button id="noteBoldBtn" type="button" class="note-style-btn rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-100">
+                                        Bold
+                                    </button>
+                                    <button id="noteItalicBtn" type="button" class="note-style-btn rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-100">
+                                        Italic
+                                    </button>
+                                    <label for="noteFontSizeSelect" class="ml-2 text-sm font-semibold text-slate-700">Size</label>
+                                    <select id="noteFontSizeSelect" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700">
+                                        <option value="16">16 px</option>
+                                        <option value="18">18 px</option>
+                                        <option value="20">20 px</option>
+                                        <option value="24">24 px</option>
+                                        <option value="28">28 px</option>
+                                        <option value="32">32 px</option>
+                                        <option value="40">40 px</option>
+                                    </select>
+                                </div>
+                                <div class="flex flex-wrap items-center gap-3">
+                                    <label class="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                                        <input id="noteBorderToggle" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-sky-700 focus:ring-sky-500">
+                                        Rounded black border in PNG
+                                    </label>
+                                    <button id="deleteSelectedNoteBtn" type="button" class="rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-sm font-semibold text-rose-700 hover:bg-rose-50">
+                                        Delete selected
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <p id="annotationHint" class="hidden text-sm font-medium text-amber-700">
+                            Annotation mode active: click inside the chart to place a note.
+                        </p>
+                    </div>
+
+                    <div id="chartCard" class="relative rounded-2xl bg-white">
+                        <div id="chartViewport" class="relative h-[860px] w-full overflow-hidden rounded-2xl">
                             <canvas id="mainChart"></canvas>
+                            <div id="chartAnnotations" class="absolute inset-0 z-10"></div>
                         </div>
                     </div>
                 </div>
