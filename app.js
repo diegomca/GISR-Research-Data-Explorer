@@ -35,6 +35,7 @@ const displaySettings = {
     tickFontSize: 14,
     axisTitleFontSize: 18,
     lineWidth: 1.6,
+    showTitle: true,
     ...(savedUIState.displaySettings || {})
 };
 
@@ -97,6 +98,11 @@ function initChartControls() {
     document.getElementById('axisTitleDecrease').addEventListener('click', () => updateDisplaySetting('axisTitleFontSize', -1, 12, 40));
     document.getElementById('lineWidthIncrease').addEventListener('click', () => updateDisplaySetting('lineWidth', 0.2, 0.8, 6, 1));
     document.getElementById('lineWidthDecrease').addEventListener('click', () => updateDisplaySetting('lineWidth', -0.2, 0.8, 6, 1));
+    document.getElementById('chartTitleToggle').addEventListener('change', (event) => {
+        displaySettings.showTitle = event.target.checked;
+        applyDisplaySettings();
+        saveUIState();
+    });
     document.getElementById('noteNormalBtn').addEventListener('click', () => updateSelectedNoteStyle({ weight: '400' }));
     document.getElementById('noteBoldBtn').addEventListener('click', () => updateSelectedNoteStyle({ weight: '700' }));
     document.getElementById('noteItalicBtn').addEventListener('click', toggleSelectedNoteItalic);
@@ -143,6 +149,7 @@ function syncControlLabels() {
     document.getElementById('tickSizeValue').textContent = `${displaySettings.tickFontSize} px`;
     document.getElementById('axisTitleValue').textContent = `${displaySettings.axisTitleFontSize} px`;
     document.getElementById('lineWidthValue').textContent = `${displaySettings.lineWidth.toFixed(1)} px`;
+    document.getElementById('chartTitleToggle').checked = displaySettings.showTitle;
 }
 
 function loadSavedState(key, fallback) {
@@ -246,6 +253,7 @@ function applyDisplaySettings() {
     options.scales.y.ticks.font.size = displaySettings.tickFontSize;
     options.scales.x.title.font.size = displaySettings.axisTitleFontSize;
     options.scales.y.title.font.size = displaySettings.axisTitleFontSize;
+    options.plugins.title.display = displaySettings.showTitle;
 
     currentChart.data.datasets.forEach(dataset => {
         dataset.borderWidth = displaySettings.lineWidth;
@@ -542,7 +550,7 @@ function renderChart(data) {
                     // Dynamic filtering removes the need for a huge clickable legend.
                 },
                 title: {
-                    display: true,
+                    display: displaySettings.showTitle,
                     text: `Network ${data.network_id} • ${currentSpreadModel} model`,
                     font: {
                         size: 22,
