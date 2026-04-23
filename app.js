@@ -1,8 +1,11 @@
 const TOTAL_NETWORKS = 27; // We know there are 27 networks
 const DATA_DIR = './web_data';
-let currentSpreadModel = 'IC'; // Default to IC
 const CHART_FONT_FAMILY = "'Source Sans 3', sans-serif";
 const CHART_TEXT_COLOR = '#334155';
+const STORAGE_KEYS = {
+    ui: 'gisr_dashboard_ui_v1',
+    notes: 'gisr_dashboard_notes_v1'
+};
 
 // Color palette matching the Python script as closely as possible
 const BASE_COLORS = [
@@ -25,11 +28,14 @@ let annotationMode = false;
 let noteCounter = 0;
 let activeDrag = null;
 let selectedNote = null;
+const savedUIState = loadSavedState(STORAGE_KEYS.ui, {});
+let currentSpreadModel = savedUIState.spreadModel || 'IC';
 
 const displaySettings = {
     tickFontSize: 14,
     axisTitleFontSize: 18,
-    lineWidth: 1.6
+    lineWidth: 1.6,
+    ...(savedUIState.displaySettings || {})
 };
 
 Chart.defaults.font.family = CHART_FONT_FAMILY;
@@ -50,6 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('networkSelect').addEventListener('change', (e) => {
         const netId = e.target.value;
+        saveUIState();
         if (netId) {
             loadNetwork(netId);
         } else {
@@ -69,6 +76,12 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('pointermove', handleNoteDragMove);
     document.addEventListener('pointerup', stopNoteDrag);
     window.addEventListener('resize', renderArrows);
+
+    const initialNetworkId = savedUIState.selectedNetworkId || '';
+    if (initialNetworkId) {
+        document.getElementById('networkSelect').value = initialNetworkId;
+        loadNetwork(initialNetworkId);
+    }
 });
 
 function initChartControls() {
@@ -123,12 +136,106 @@ function updateDisplaySetting(key, delta, min, max, decimals = 0) {
     displaySettings[key] = decimals > 0 ? Number(next.toFixed(decimals)) : Math.round(next);
     syncControlLabels();
     applyDisplaySettings();
+    saveUIState();
 }
 
 function syncControlLabels() {
     document.getElementById('tickSizeValue').textContent = `${displaySettings.tickFontSize} px`;
     document.getElementById('axisTitleValue').textContent = `${displaySettings.axisTitleFontSize} px`;
     document.getElementById('lineWidthValue').textContent = `${displaySettings.lineWidth.toFixed(1)} px`;
+}
+
+function loadSavedState(key, fallback) {
+    try {
+        const raw = localStorage.getItem(key);
+        return raw ? JSON.parse(raw) : fallback;
+    } catch (error) {
+        console.error(`Unable to load localStorage key ${key}:`, error);
+        return fallback;
+    }
+}
+
+function saveSavedState(key, value) {
+    try {
+        localStorage.setItem(key, JSON.stringify(value));
+    } catch (error) {
+        console.error(`Unable to save localStorage key ${key}:`, error);
+    }
+}
+
+function saveUIState() {
+    const selectedNetworkId = document.getElementById('networkSelect')?.value || '';
+    saveSavedState(STORAGE_KEYS.ui, {
+        spreadModel: currentSpreadModel,
+        selectedNetworkId,
+        displaySettings
+    });
+}
+
+function getChartStorageKey(networkId = currentData?.network_id, spreadModel = currentSpreadModel) {
+    return networkId ? `${spreadModel}:${networkId}` : null;
+}
+
+function loadNotesStore() {
+    return loadSavedState(STORAGE_KEYS.notes, {});
+}
+
+function saveNotesStore(store) {
+    saveSavedState(STORAGE_KEYS.notes, store);
+}
+
+function serializeAnnotations() {
+    return Array.from(document.querySelectorAll('#chartNotesLayer .chart-note')).map(note => {
+        const body = note.querySelector('.chart-note-body');
+        return {
+            noteId: note.dataset.noteId,
+            xPercent: parseFloat(note.dataset.xPercent),
+            yPercent: parseFloat(note.dataset.yPercent),
+            text: body.innerText,
+            fontWeight: note.dataset.fontWeight || '400',
+            fontStyle: note.dataset.fontStyle || 'normal',
+            fontSize: parseInt(note.dataset.fontSize || '20', 10),
+            arrowEnabled: note.dataset.arrowEnabled === 'true',
+            arrowColor: note.dataset.arrowColor || '#111111',
+            arrowWidth: parseInt(note.dataset.arrowWidth || '3', 10),
+            arrowStyle: note.dataset.arrowStyle || 'straight',
+            arrowXPercent: parseFloat(note.dataset.arrowXPercent || note.dataset.xPercent),
+            arrowYPercent: parseFloat(note.dataset.arrowYPercent || note.dataset.yPercent),
+            exportBorder: note.dataset.exportBorder === 'true'
+        };
+    });
+}
+
+function persistAnnotationsForCurrentChart() {
+    const storageKey = getChartStorageKey();
+    if (!storageKey) return;
+
+    const store = loadNotesStore();
+    const serialized = serializeAnnotations();
+
+    if (serialized.length > 0) {
+        store[storageKey] = serialized;
+    } else {
+        delete store[storageKey];
+    }
+
+    saveNotesStore(store);
+}
+
+function restoreAnnotationsForCurrentChart() {
+    removeAnnotationsFromDom();
+    const storageKey = getChartStorageKey();
+    if (!storageKey) return;
+
+    const store = loadNotesStore();
+    const annotations = store[storageKey] || [];
+
+    annotations.forEach(annotation => {
+        createAnnotationNote(annotation, { focus: false, persist: false });
+    });
+
+    setSelectedNote(null);
+    renderArrows();
 }
 
 function applyDisplaySettings() {
@@ -171,6 +278,7 @@ function initModelSelect() {
         if (currentSpreadModel === 'IC') return;
         currentSpreadModel = 'IC';
         updateBtns();
+        saveUIState();
         // Reload if a network is selected
         const netId = document.getElementById('networkSelect').value;
         if (netId) loadNetwork(netId);
@@ -180,6 +288,7 @@ function initModelSelect() {
         if (currentSpreadModel === 'LT') return;
         currentSpreadModel = 'LT';
         updateBtns();
+        saveUIState();
         // Reload if a network is selected
         const netId = document.getElementById('networkSelect').value;
         if (netId) loadNetwork(netId);
@@ -192,7 +301,7 @@ function resetChart() {
     if (currentChart) currentChart.destroy();
     document.getElementById('networkInfo').classList.add('hidden');
     document.getElementById('filterPanel').classList.add('hidden');
-    clearAnnotations();
+    clearAnnotations({ persist: false });
     currentData = null;
 }
 
@@ -219,6 +328,8 @@ async function loadNetwork(id) {
         updateInfo(data.params);
         initFilters(data);
         renderChart(data);
+        restoreAnnotationsForCurrentChart();
+        saveUIState();
 
     } catch (e) {
         console.error("Failed to load network data:", e);
@@ -615,6 +726,7 @@ function updateSelectedNoteStyle(patch) {
     syncNoteStylePanel();
     updateArrowTargetsVisibility();
     renderArrows();
+    persistAnnotationsForCurrentChart();
 }
 
 function toggleSelectedNoteItalic() {
@@ -654,25 +766,42 @@ function handleChartViewportClick(event) {
     if (annotationMode) toggleAnnotationMode();
 }
 
-function createAnnotationNote({ xPercent, yPercent, text = '' }) {
+function createAnnotationNote({
+    noteId = null,
+    xPercent,
+    yPercent,
+    text = '',
+    fontWeight = '400',
+    fontStyle = 'normal',
+    fontSize = 20,
+    arrowEnabled = true,
+    arrowColor = '#111111',
+    arrowWidth = 3,
+    arrowStyle = 'straight',
+    arrowXPercent = null,
+    arrowYPercent = null,
+    exportBorder = false
+}, options = {}) {
+    const { focus = true, persist = true } = options;
     const notesLayer = document.getElementById('chartNotesLayer');
     const note = document.createElement('div');
-    const noteId = `note-${noteCounter++}`;
+    const resolvedNoteId = noteId || `note-${noteCounter++}`;
+    noteCounter = Math.max(noteCounter, extractNoteCounter(resolvedNoteId) + 1);
 
     note.className = 'chart-note';
-    note.dataset.noteId = noteId;
+    note.dataset.noteId = resolvedNoteId;
     note.dataset.xPercent = xPercent.toFixed(2);
     note.dataset.yPercent = yPercent.toFixed(2);
-    note.dataset.fontWeight = '400';
-    note.dataset.fontStyle = 'normal';
-    note.dataset.fontSize = '20';
-    note.dataset.arrowEnabled = 'true';
-    note.dataset.arrowColor = '#111111';
-    note.dataset.arrowWidth = '3';
-    note.dataset.arrowStyle = 'straight';
-    note.dataset.arrowXPercent = clamp(xPercent + 10, 2, 98).toFixed(2);
-    note.dataset.arrowYPercent = clamp(yPercent + 10, 2, 98).toFixed(2);
-    note.dataset.exportBorder = 'false';
+    note.dataset.fontWeight = fontWeight;
+    note.dataset.fontStyle = fontStyle;
+    note.dataset.fontSize = String(fontSize);
+    note.dataset.arrowEnabled = String(arrowEnabled);
+    note.dataset.arrowColor = arrowColor;
+    note.dataset.arrowWidth = String(arrowWidth);
+    note.dataset.arrowStyle = arrowStyle;
+    note.dataset.arrowXPercent = String(clamp(arrowXPercent ?? (xPercent + 10), 2, 98).toFixed(2));
+    note.dataset.arrowYPercent = String(clamp(arrowYPercent ?? (yPercent + 10), 2, 98).toFixed(2));
+    note.dataset.exportBorder = String(exportBorder);
     note.style.left = `${xPercent}%`;
     note.style.top = `${yPercent}%`;
 
@@ -688,7 +817,7 @@ function createAnnotationNote({ xPercent, yPercent, text = '' }) {
     const arrowTarget = document.createElement('button');
     arrowTarget.type = 'button';
     arrowTarget.className = 'chart-note-target';
-    arrowTarget.dataset.noteId = noteId;
+    arrowTarget.dataset.noteId = resolvedNoteId;
     arrowTarget.title = 'Drag arrow target';
     arrowTarget.setAttribute('aria-label', 'Drag arrow target');
 
@@ -700,7 +829,10 @@ function createAnnotationNote({ xPercent, yPercent, text = '' }) {
         setSelectedNote(note);
     });
     body.addEventListener('focus', () => setSelectedNote(note));
-    body.addEventListener('input', () => setSelectedNote(note));
+    body.addEventListener('input', () => {
+        setSelectedNote(note);
+        persistAnnotationsForCurrentChart();
+    });
     note.addEventListener('pointerdown', (event) => {
         if (event.target === body) return;
         setSelectedNote(note);
@@ -711,14 +843,21 @@ function createAnnotationNote({ xPercent, yPercent, text = '' }) {
     notesLayer.appendChild(arrowTarget);
     applyNoteStyles(note);
     setSelectedNote(note);
-    body.focus();
 
-    const selection = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(body);
-    range.collapse(false);
-    selection.removeAllRanges();
-    selection.addRange(range);
+    if (focus) {
+        body.focus();
+
+        const selection = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(body);
+        range.collapse(false);
+        selection.removeAllRanges();
+        selection.addRange(range);
+    }
+
+    if (persist) {
+        persistAnnotationsForCurrentChart();
+    }
     renderArrows();
 }
 
@@ -783,20 +922,30 @@ function handleNoteDragMove(event) {
 }
 
 function stopNoteDrag() {
+    if (activeDrag?.note) {
+        persistAnnotationsForCurrentChart();
+    }
     activeDrag = null;
 }
 
-function clearAnnotations() {
+function removeAnnotationsFromDom() {
     activeDrag = null;
     document.getElementById('chartNotesLayer').replaceChildren();
     clearArrowLayer();
     setSelectedNote(null);
+}
+
+function clearAnnotations({ persist = true } = {}) {
+    removeAnnotationsFromDom();
+    if (persist) {
+        persistAnnotationsForCurrentChart();
+    }
     if (annotationMode) {
         toggleAnnotationMode();
     }
 }
 
-function deleteSelectedNote() {
+function deleteSelectedNote({ persist = true } = {}) {
     if (!selectedNote?.isConnected) return;
     const noteToDelete = selectedNote;
     const target = getArrowTargetElement(noteToDelete);
@@ -804,6 +953,9 @@ function deleteSelectedNote() {
     noteToDelete.remove();
     target?.remove();
     renderArrows();
+    if (persist) {
+        persistAnnotationsForCurrentChart();
+    }
 }
 
 function getArrowTargetElement(note) {
@@ -1129,6 +1281,11 @@ function drawArrow(ctx, geometry, color, width) {
     ctx.stroke();
     ctx.fill();
     ctx.restore();
+}
+
+function extractNoteCounter(noteId) {
+    const match = String(noteId).match(/note-(\d+)/);
+    return match ? parseInt(match[1], 10) : 0;
 }
 
 function clamp(value, min, max) {
