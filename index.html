@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GISR Scientific Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Source Sans 3', sans-serif; }
+        h1, h2, h3 { font-family: 'Source Serif 4', serif; }
+    </style>
+</head>
+<body class="min-h-screen bg-slate-100 text-slate-900">
+    <div class="mx-auto max-w-[1800px] px-4 py-8 lg:px-8">
+        <header class="mb-8 rounded-3xl border border-slate-200 bg-gradient-to-r from-white via-slate-50 to-sky-50 p-6 shadow-sm">
+            <div class="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+                <div class="max-w-4xl">
+                    <p class="mb-2 text-sm font-semibold uppercase tracking-[0.18em] text-sky-700">GISR Research Data Explorer</p>
+                    <h1 class="text-3xl font-bold text-slate-950 md:text-4xl">Interactive dashboard for GISR centrality growth curves</h1>
+                    <p class="mt-3 max-w-3xl text-base leading-7 text-slate-600">
+                        Explore the synthetic network dataset used to study how density, diameter, neighborhood depth, activation probability,
+                        and diffusion model shape GISR rankings.
+                    </p>
+                </div>
+
+                <div class="w-full xl:max-w-md">
+                    <p class="mb-3 text-sm font-medium text-slate-600">Diffusion model</p>
+                    <div class="flex rounded-2xl border border-slate-200 bg-white p-1 shadow-sm" role="group" aria-label="Diffusion model selector">
+                        <button type="button" id="modelIC" class="model-btn flex-1 rounded-xl px-4 py-3 text-sm font-semibold text-white bg-sky-700 transition-colors">
+                            Independent Cascade (IC)
+                        </button>
+                        <button type="button" id="modelLT" class="model-btn flex-1 rounded-xl px-4 py-3 text-sm font-semibold text-slate-700 transition-colors">
+                            Linear Threshold (LT)
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <section class="mb-8 grid grid-cols-1 gap-4 xl:grid-cols-3">
+            <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm xl:col-span-2">
+                <h2 class="text-xl font-semibold text-slate-950">How to read the curves</h2>
+                <p class="mt-3 text-sm leading-7 text-slate-600">
+                    Each line sorts nodes from lower to higher GISR centrality. Informative configurations produce monotonic curves with visible
+                    variability; nearly flat curves indicate weak discrimination because most nodes concentrate near the same centrality level.
+                </p>
+            </article>
+            <article class="rounded-2xl border border-slate-200 bg-slate-950 p-5 text-slate-100 shadow-sm">
+                <h2 class="text-xl font-semibold">Published data</h2>
+                <p class="mt-3 text-sm leading-7 text-slate-300">
+                    27 synthetic networks, 2 diffusion models, 48 parameter combinations per network-model pair, and derived curve metrics for
+                    comparative analysis.
+                </p>
+            </article>
+        </section>
+
+        <main class="grid grid-cols-1 gap-6 xl:grid-cols-12">
+            <aside class="space-y-6 xl:col-span-3">
+                <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <label for="networkSelect" class="block text-sm font-semibold text-slate-700">Network</label>
+                    <select id="networkSelect" class="mt-3 block w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200">
+                        <option value="">Choose a network...</option>
+                    </select>
+
+                    <div id="networkInfo" class="mt-5 hidden space-y-2 border-t border-slate-100 pt-4 text-sm text-slate-600">
+                        <div class="flex justify-between gap-4"><span>Nodes</span> <span id="infoNodes" class="font-semibold text-slate-900"></span></div>
+                        <div class="flex justify-between gap-4"><span>Density</span> <span id="infoDensity" class="font-semibold text-slate-900"></span></div>
+                        <div class="flex justify-between gap-4"><span>Diameter</span> <span id="infoDiameter" class="font-semibold text-slate-900"></span></div>
+                    </div>
+                </section>
+
+                <section id="filterPanel" class="hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <div class="mb-4 flex items-center justify-between gap-4">
+                        <h2 class="text-xl font-semibold text-slate-950">Filters</h2>
+                        <button id="resetFilters" class="text-sm font-semibold text-sky-700 hover:text-sky-900">Reset all</button>
+                    </div>
+
+                    <div class="mb-6">
+                        <h3 class="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Depth level (ℓ)</h3>
+                        <div id="filterK" class="space-y-2 max-h-48 overflow-y-auto"></div>
+                    </div>
+
+                    <div class="mb-6">
+                        <h3 class="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Activation probability (λ)</h3>
+                        <div id="filterProb" class="space-y-2 max-h-48 overflow-y-auto"></div>
+                    </div>
+
+                    <div>
+                        <h3 class="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Neighborhood direction</h3>
+                        <div id="filterDir" class="space-y-2"></div>
+                    </div>
+                </section>
+            </aside>
+
+            <section class="xl:col-span-9">
+                <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div class="mb-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                        <div>
+                            <h2 class="text-2xl font-semibold text-slate-950">Growth Curves</h2>
+                            <p class="mt-1 text-sm leading-6 text-slate-600">
+                                Labels and margins were optimized for GitHub Pages screenshots and scientific reading.
+                            </p>
+                        </div>
+                        <p class="max-w-xl text-sm leading-6 text-slate-500">
+                            The x-axis orders nodes by increasing GISR value. Use the filters to isolate depth, probability, and direction settings.
+                        </p>
+                    </div>
+
+                    <div class="h-[860px]">
+                        <div class="relative h-full w-full">
+                            <canvas id="mainChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
