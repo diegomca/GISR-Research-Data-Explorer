@@ -68,6 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     document.addEventListener('pointermove', handleNoteDragMove);
     document.addEventListener('pointerup', stopNoteDrag);
+    window.addEventListener('resize', renderArrows);
 });
 
 function initChartControls() {
@@ -89,12 +90,24 @@ function initChartControls() {
     document.getElementById('noteFontSizeSelect').addEventListener('change', (event) => {
         updateSelectedNoteStyle({ fontSize: parseInt(event.target.value, 10) });
     });
+    document.getElementById('noteArrowToggle').addEventListener('change', (event) => {
+        updateSelectedNoteStyle({ arrowEnabled: event.target.checked });
+    });
+    document.getElementById('noteArrowColorInput').addEventListener('input', (event) => {
+        updateSelectedNoteStyle({ arrowColor: event.target.value });
+    });
+    document.getElementById('noteArrowWidthSelect').addEventListener('change', (event) => {
+        updateSelectedNoteStyle({ arrowWidth: parseInt(event.target.value, 10) });
+    });
+    document.getElementById('noteArrowStyleSelect').addEventListener('change', (event) => {
+        updateSelectedNoteStyle({ arrowStyle: event.target.value });
+    });
     document.getElementById('noteBorderToggle').addEventListener('change', (event) => {
         updateSelectedNoteStyle({ exportBorder: event.target.checked });
     });
 
     document.getElementById('chartViewport').addEventListener('click', handleChartViewportClick);
-    document.getElementById('chartAnnotations').addEventListener('click', (event) => {
+    document.getElementById('chartNotesLayer').addEventListener('click', (event) => {
         const note = event.target.closest('.chart-note');
         if (note) {
             setSelectedNote(note);
@@ -475,6 +488,7 @@ function handleFullscreenChange() {
 
     window.setTimeout(() => {
         if (currentChart) currentChart.resize();
+        renderArrows();
     }, 120);
 }
 
@@ -494,6 +508,8 @@ function toggleAnnotationMode() {
 function setSelectedNote(note) {
     if (selectedNote === note) {
         syncNoteStylePanel();
+        updateArrowTargetsVisibility();
+        renderArrows();
         return;
     }
 
@@ -508,6 +524,8 @@ function setSelectedNote(note) {
     }
 
     syncNoteStylePanel();
+    updateArrowTargetsVisibility();
+    renderArrows();
 }
 
 function syncNoteStylePanel() {
@@ -516,6 +534,10 @@ function syncNoteStylePanel() {
     const boldBtn = document.getElementById('noteBoldBtn');
     const italicBtn = document.getElementById('noteItalicBtn');
     const sizeSelect = document.getElementById('noteFontSizeSelect');
+    const arrowToggle = document.getElementById('noteArrowToggle');
+    const arrowColorInput = document.getElementById('noteArrowColorInput');
+    const arrowWidthSelect = document.getElementById('noteArrowWidthSelect');
+    const arrowStyleSelect = document.getElementById('noteArrowStyleSelect');
     const borderToggle = document.getElementById('noteBorderToggle');
     const deleteBtn = document.getElementById('deleteSelectedNoteBtn');
 
@@ -526,6 +548,11 @@ function syncNoteStylePanel() {
         normalBtn.classList.remove('active');
         boldBtn.classList.remove('active');
         italicBtn.classList.remove('active');
+        arrowToggle.checked = false;
+        arrowColorInput.value = '#111111';
+        arrowWidthSelect.value = '3';
+        arrowStyleSelect.value = 'straight';
+        borderToggle.checked = false;
         deleteBtn.disabled = true;
         deleteBtn.classList.add('opacity-50', 'cursor-not-allowed');
         return;
@@ -535,9 +562,17 @@ function syncNoteStylePanel() {
     const fontSize = parseInt(selectedNote.dataset.fontSize || '20', 10);
     const isBold = (selectedNote.dataset.fontWeight || '400') === '700';
     const isItalic = (selectedNote.dataset.fontStyle || 'normal') === 'italic';
+    const hasArrow = selectedNote.dataset.arrowEnabled === 'true';
+    const arrowColor = selectedNote.dataset.arrowColor || '#111111';
+    const arrowWidth = selectedNote.dataset.arrowWidth || '3';
+    const arrowStyle = selectedNote.dataset.arrowStyle || 'straight';
     const hasBorder = selectedNote.dataset.exportBorder === 'true';
 
     sizeSelect.value = String(fontSize);
+    arrowToggle.checked = hasArrow;
+    arrowColorInput.value = arrowColor;
+    arrowWidthSelect.value = arrowWidth;
+    arrowStyleSelect.value = arrowStyle;
     borderToggle.checked = hasBorder;
     body.style.fontSize = `${fontSize}px`;
 
@@ -563,9 +598,23 @@ function updateSelectedNoteStyle(patch) {
     if (typeof patch.exportBorder === 'boolean') {
         selectedNote.dataset.exportBorder = String(patch.exportBorder);
     }
+    if (typeof patch.arrowEnabled === 'boolean') {
+        selectedNote.dataset.arrowEnabled = String(patch.arrowEnabled);
+    }
+    if (patch.arrowColor) {
+        selectedNote.dataset.arrowColor = patch.arrowColor;
+    }
+    if (patch.arrowWidth) {
+        selectedNote.dataset.arrowWidth = String(patch.arrowWidth);
+    }
+    if (patch.arrowStyle) {
+        selectedNote.dataset.arrowStyle = patch.arrowStyle;
+    }
 
     applyNoteStyles(selectedNote);
     syncNoteStylePanel();
+    updateArrowTargetsVisibility();
+    renderArrows();
 }
 
 function toggleSelectedNoteItalic() {
@@ -579,6 +628,7 @@ function applyNoteStyles(note) {
     body.style.fontWeight = note.dataset.fontWeight || '400';
     body.style.fontStyle = note.dataset.fontStyle || 'normal';
     body.style.fontSize = `${parseInt(note.dataset.fontSize || '20', 10)}px`;
+    updateArrowTargetPosition(note);
 }
 
 function handleChartViewportClick(event) {
@@ -605,7 +655,7 @@ function handleChartViewportClick(event) {
 }
 
 function createAnnotationNote({ xPercent, yPercent, text = '' }) {
-    const annotationsLayer = document.getElementById('chartAnnotations');
+    const notesLayer = document.getElementById('chartNotesLayer');
     const note = document.createElement('div');
     const noteId = `note-${noteCounter++}`;
 
@@ -616,6 +666,12 @@ function createAnnotationNote({ xPercent, yPercent, text = '' }) {
     note.dataset.fontWeight = '400';
     note.dataset.fontStyle = 'normal';
     note.dataset.fontSize = '20';
+    note.dataset.arrowEnabled = 'true';
+    note.dataset.arrowColor = '#111111';
+    note.dataset.arrowWidth = '3';
+    note.dataset.arrowStyle = 'straight';
+    note.dataset.arrowXPercent = clamp(xPercent + 10, 2, 98).toFixed(2);
+    note.dataset.arrowYPercent = clamp(yPercent + 10, 2, 98).toFixed(2);
     note.dataset.exportBorder = 'false';
     note.style.left = `${xPercent}%`;
     note.style.top = `${yPercent}%`;
@@ -629,8 +685,20 @@ function createAnnotationNote({ xPercent, yPercent, text = '' }) {
 
     const dragHandle = note.querySelector('[data-drag-handle="true"]');
     const body = note.querySelector('.chart-note-body');
+    const arrowTarget = document.createElement('button');
+    arrowTarget.type = 'button';
+    arrowTarget.className = 'chart-note-target';
+    arrowTarget.dataset.noteId = noteId;
+    arrowTarget.title = 'Drag arrow target';
+    arrowTarget.setAttribute('aria-label', 'Drag arrow target');
 
     dragHandle.addEventListener('pointerdown', (event) => startNoteDrag(event, note));
+    arrowTarget.addEventListener('pointerdown', (event) => startArrowTargetDrag(event, note));
+    arrowTarget.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        setSelectedNote(note);
+    });
     body.addEventListener('focus', () => setSelectedNote(note));
     body.addEventListener('input', () => setSelectedNote(note));
     note.addEventListener('pointerdown', (event) => {
@@ -639,7 +707,8 @@ function createAnnotationNote({ xPercent, yPercent, text = '' }) {
     });
     body.textContent = text;
 
-    annotationsLayer.appendChild(note);
+    notesLayer.appendChild(note);
+    notesLayer.appendChild(arrowTarget);
     applyNoteStyles(note);
     setSelectedNote(note);
     body.focus();
@@ -650,6 +719,7 @@ function createAnnotationNote({ xPercent, yPercent, text = '' }) {
     range.collapse(false);
     selection.removeAllRanges();
     selection.addRange(range);
+    renderArrows();
 }
 
 function startNoteDrag(event, note) {
@@ -660,6 +730,7 @@ function startNoteDrag(event, note) {
     const noteRect = note.getBoundingClientRect();
 
     activeDrag = {
+        type: 'note',
         note,
         offsetX: event.clientX - noteRect.left,
         offsetY: event.clientY - noteRect.top,
@@ -669,22 +740,46 @@ function startNoteDrag(event, note) {
     note.setPointerCapture?.(event.pointerId);
 }
 
+function startArrowTargetDrag(event, note) {
+    event.preventDefault();
+    event.stopPropagation();
+    setSelectedNote(note);
+
+    const viewportRect = document.getElementById('chartViewport').getBoundingClientRect();
+    activeDrag = {
+        type: 'target',
+        note,
+        viewportRect
+    };
+}
+
 function handleNoteDragMove(event) {
     if (!activeDrag) return;
 
-    const { note, offsetX, offsetY, viewportRect } = activeDrag;
-    const noteRect = note.getBoundingClientRect();
+    const { type, note, offsetX, offsetY, viewportRect } = activeDrag;
 
-    const leftPx = clamp(event.clientX - viewportRect.left - offsetX, 0, viewportRect.width - noteRect.width);
-    const topPx = clamp(event.clientY - viewportRect.top - offsetY, 0, viewportRect.height - noteRect.height);
+    if (type === 'note') {
+        const noteRect = note.getBoundingClientRect();
+        const leftPx = clamp(event.clientX - viewportRect.left - offsetX, 0, viewportRect.width - noteRect.width);
+        const topPx = clamp(event.clientY - viewportRect.top - offsetY, 0, viewportRect.height - noteRect.height);
 
-    const xPercent = (leftPx / viewportRect.width) * 100;
-    const yPercent = (topPx / viewportRect.height) * 100;
+        const xPercent = (leftPx / viewportRect.width) * 100;
+        const yPercent = (topPx / viewportRect.height) * 100;
 
-    note.dataset.xPercent = xPercent.toFixed(2);
-    note.dataset.yPercent = yPercent.toFixed(2);
-    note.style.left = `${xPercent}%`;
-    note.style.top = `${yPercent}%`;
+        note.dataset.xPercent = xPercent.toFixed(2);
+        note.dataset.yPercent = yPercent.toFixed(2);
+        note.style.left = `${xPercent}%`;
+        note.style.top = `${yPercent}%`;
+    } else if (type === 'target') {
+        const xPercent = clamp(((event.clientX - viewportRect.left) / viewportRect.width) * 100, 0, 100);
+        const yPercent = clamp(((event.clientY - viewportRect.top) / viewportRect.height) * 100, 0, 100);
+
+        note.dataset.arrowXPercent = xPercent.toFixed(2);
+        note.dataset.arrowYPercent = yPercent.toFixed(2);
+        updateArrowTargetPosition(note);
+    }
+
+    renderArrows();
 }
 
 function stopNoteDrag() {
@@ -693,7 +788,8 @@ function stopNoteDrag() {
 
 function clearAnnotations() {
     activeDrag = null;
-    document.getElementById('chartAnnotations').replaceChildren();
+    document.getElementById('chartNotesLayer').replaceChildren();
+    clearArrowLayer();
     setSelectedNote(null);
     if (annotationMode) {
         toggleAnnotationMode();
@@ -703,8 +799,146 @@ function clearAnnotations() {
 function deleteSelectedNote() {
     if (!selectedNote?.isConnected) return;
     const noteToDelete = selectedNote;
+    const target = getArrowTargetElement(noteToDelete);
     setSelectedNote(null);
     noteToDelete.remove();
+    target?.remove();
+    renderArrows();
+}
+
+function getArrowTargetElement(note) {
+    return document.querySelector(`.chart-note-target[data-note-id="${note.dataset.noteId}"]`);
+}
+
+function updateArrowTargetPosition(note) {
+    const target = getArrowTargetElement(note);
+    if (!target) return;
+    target.style.left = `${note.dataset.arrowXPercent}%`;
+    target.style.top = `${note.dataset.arrowYPercent}%`;
+}
+
+function updateArrowTargetsVisibility() {
+    document.querySelectorAll('.chart-note-target').forEach(target => {
+        const note = document.querySelector(`.chart-note[data-note-id="${target.dataset.noteId}"]`);
+        const isVisible = Boolean(
+            note &&
+            note.isConnected &&
+            selectedNote === note &&
+            note.dataset.arrowEnabled === 'true'
+        );
+        target.classList.toggle('visible', isVisible);
+        if (note) updateArrowTargetPosition(note);
+    });
+}
+
+function clearArrowLayer() {
+    const arrowLayer = document.getElementById('chartArrowLayer');
+    arrowLayer.querySelectorAll('.rendered-arrow').forEach(element => element.remove());
+}
+
+function renderArrows() {
+    clearArrowLayer();
+
+    const arrowLayer = document.getElementById('chartArrowLayer');
+    document.querySelectorAll('#chartNotesLayer .chart-note').forEach(note => {
+        if (note.dataset.arrowEnabled !== 'true') return;
+
+        const positions = getNoteAndArrowPositions(note);
+        if (!positions) return;
+
+        const geometry = getArrowGeometry(
+            positions.startX,
+            positions.startY,
+            positions.endX,
+            positions.endY,
+            note.dataset.arrowStyle || 'straight'
+        );
+
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', geometry.pathData);
+        path.setAttribute('fill', 'none');
+        path.setAttribute('stroke', note.dataset.arrowColor || '#111111');
+        path.setAttribute('stroke-width', note.dataset.arrowWidth || '3');
+        path.setAttribute('stroke-linecap', 'round');
+        path.setAttribute('stroke-linejoin', 'round');
+        path.classList.add('rendered-arrow');
+        arrowLayer.appendChild(path);
+
+        const arrowHead = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        arrowHead.setAttribute('points', geometry.headPoints);
+        arrowHead.setAttribute('fill', note.dataset.arrowColor || '#111111');
+        arrowHead.classList.add('rendered-arrow');
+        arrowLayer.appendChild(arrowHead);
+    });
+
+    updateArrowTargetsVisibility();
+}
+
+function getNoteAndArrowPositions(note) {
+    const viewportRect = document.getElementById('chartViewport').getBoundingClientRect();
+    const noteRect = note.getBoundingClientRect();
+
+    if (!viewportRect.width || !viewportRect.height || !noteRect.width || !noteRect.height) {
+        return null;
+    }
+
+    const noteLeft = noteRect.left - viewportRect.left;
+    const noteTop = noteRect.top - viewportRect.top;
+    const noteWidth = noteRect.width;
+    const noteHeight = noteRect.height;
+    const centerX = noteLeft + (noteWidth / 2);
+    const centerY = noteTop + (noteHeight / 2);
+    const endX = (parseFloat(note.dataset.arrowXPercent) / 100) * viewportRect.width;
+    const endY = (parseFloat(note.dataset.arrowYPercent) / 100) * viewportRect.height;
+    const anchor = getRectAnchorPoint(centerX, centerY, noteWidth, noteHeight, endX, endY);
+
+    return {
+        startX: anchor.x,
+        startY: anchor.y,
+        endX,
+        endY
+    };
+}
+
+function getRectAnchorPoint(centerX, centerY, width, height, targetX, targetY) {
+    const dx = targetX - centerX;
+    const dy = targetY - centerY;
+    const halfWidth = width / 2;
+    const halfHeight = height / 2;
+
+    if (dx === 0 && dy === 0) {
+        return { x: centerX + halfWidth, y: centerY };
+    }
+
+    const scale = 1 / Math.max(Math.abs(dx) / halfWidth, Math.abs(dy) / halfHeight);
+    return {
+        x: centerX + (dx * scale),
+        y: centerY + (dy * scale)
+    };
+}
+
+function getArrowGeometry(startX, startY, endX, endY, style = 'straight') {
+    const sanitizedStyle = style === 'elbow' ? 'elbow' : 'straight';
+
+    if (sanitizedStyle === 'elbow' && Math.abs(endX - startX) > 18 && Math.abs(endY - startY) > 18) {
+        const bendX = startX + ((endX - startX) * 0.58);
+        const pathData = `M ${startX} ${startY} L ${bendX} ${startY} L ${bendX} ${endY} L ${endX} ${endY}`;
+        const headPoints = getArrowHeadPoints(bendX, endY, endX, endY, 14);
+        return { pathData, headPoints };
+    }
+
+    const pathData = `M ${startX} ${startY} L ${endX} ${endY}`;
+    const headPoints = getArrowHeadPoints(startX, startY, endX, endY, 14);
+    return { pathData, headPoints };
+}
+
+function getArrowHeadPoints(fromX, fromY, toX, toY, headLength = 14) {
+    const angle = Math.atan2(toY - fromY, toX - fromX);
+    const leftX = toX - (headLength * Math.cos(angle - Math.PI / 7));
+    const leftY = toY - (headLength * Math.sin(angle - Math.PI / 7));
+    const rightX = toX - (headLength * Math.cos(angle + Math.PI / 7));
+    const rightY = toY - (headLength * Math.sin(angle + Math.PI / 7));
+    return `${toX},${toY} ${leftX},${leftY} ${rightX},${rightY}`;
 }
 
 function exportChartAsImage() {
@@ -724,6 +958,25 @@ function exportChartAsImage() {
     ctx.drawImage(chartCanvas, 0, 0, exportCanvas.width, exportCanvas.height);
 
     document.querySelectorAll('#chartAnnotations .chart-note').forEach(note => {
+        const positions = getNoteExportPositions(note, viewportRect, exportCanvas);
+        if (!positions) return;
+
+        if (note.dataset.arrowEnabled === 'true') {
+            const geometry = getArrowGeometry(
+                positions.startX,
+                positions.startY,
+                positions.endX,
+                positions.endY,
+                note.dataset.arrowStyle || 'straight'
+            );
+            drawArrow(
+                ctx,
+                geometry,
+                note.dataset.arrowColor || '#111111',
+                parseFloat(note.dataset.arrowWidth || '3')
+            );
+        }
+
         const x = (parseFloat(note.dataset.xPercent) / 100) * exportCanvas.width;
         const y = (parseFloat(note.dataset.yPercent) / 100) * exportCanvas.height;
         const noteWidth = (note.offsetWidth / viewportRect.width) * exportCanvas.width;
@@ -831,6 +1084,51 @@ function drawWrappedText(ctx, lines, x, startY, lineHeight) {
     lines.forEach((line, index) => {
         ctx.fillText(line, x, startY + (index * lineHeight));
     });
+}
+
+function getNoteExportPositions(note, viewportRect, exportCanvas) {
+    if (!note?.isConnected) return null;
+
+    const noteRect = note.getBoundingClientRect();
+    const noteLeft = ((noteRect.left - viewportRect.left) / viewportRect.width) * exportCanvas.width;
+    const noteTop = ((noteRect.top - viewportRect.top) / viewportRect.height) * exportCanvas.height;
+    const noteWidth = (noteRect.width / viewportRect.width) * exportCanvas.width;
+    const noteHeight = (noteRect.height / viewportRect.height) * exportCanvas.height;
+    const centerX = noteLeft + (noteWidth / 2);
+    const centerY = noteTop + (noteHeight / 2);
+    const endX = (parseFloat(note.dataset.arrowXPercent) / 100) * exportCanvas.width;
+    const endY = (parseFloat(note.dataset.arrowYPercent) / 100) * exportCanvas.height;
+    const anchor = getRectAnchorPoint(centerX, centerY, noteWidth, noteHeight, endX, endY);
+
+    return {
+        startX: anchor.x,
+        startY: anchor.y,
+        endX,
+        endY
+    };
+}
+
+function drawArrow(ctx, geometry, color, width) {
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = width;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    ctx.beginPath();
+    const path = new Path2D(geometry.pathData);
+    ctx.stroke(path);
+
+    const points = geometry.headPoints.split(' ').map(point => point.split(',').map(Number));
+    ctx.beginPath();
+    ctx.moveTo(points[0][0], points[0][1]);
+    ctx.lineTo(points[1][0], points[1][1]);
+    ctx.lineTo(points[2][0], points[2][1]);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.fill();
+    ctx.restore();
 }
 
 function clamp(value, min, max) {

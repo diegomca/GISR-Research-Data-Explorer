@@ -62,6 +62,37 @@
         .chart-note.selected .chart-note-handle {
             display: inline-flex;
         }
+        .chart-note-target {
+            position: absolute;
+            display: none;
+            width: 18px;
+            height: 18px;
+            border: 2px solid #0f172a;
+            border-radius: 999px;
+            background: #ffffff;
+            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.12);
+            transform: translate(-50%, -50%);
+            cursor: crosshair;
+            z-index: 5;
+        }
+        .chart-note-target::after {
+            content: "";
+            position: absolute;
+            inset: 4px;
+            border-radius: 999px;
+            background: #0f172a;
+        }
+        .chart-note-target.visible {
+            display: block;
+        }
+        #chartArrowLayer {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: visible;
+        }
         .note-style-btn.active {
             background: #0f172a;
             color: #ffffff;
@@ -245,6 +276,31 @@
                                 </div>
                                 <div class="flex flex-wrap items-center gap-3">
                                     <label class="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                                        <input id="noteArrowToggle" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-sky-700 focus:ring-sky-500">
+                                        Arrow
+                                    </label>
+                                    <label class="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                                        Color
+                                        <input id="noteArrowColorInput" type="color" value="#111111" class="h-9 w-12 cursor-pointer rounded border border-slate-300 bg-white p-1">
+                                    </label>
+                                    <label for="noteArrowWidthSelect" class="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                                        Width
+                                        <select id="noteArrowWidthSelect" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700">
+                                            <option value="2">2 px</option>
+                                            <option value="3" selected>3 px</option>
+                                            <option value="4">4 px</option>
+                                            <option value="5">5 px</option>
+                                            <option value="6">6 px</option>
+                                        </select>
+                                    </label>
+                                    <label for="noteArrowStyleSelect" class="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                                        Style
+                                        <select id="noteArrowStyleSelect" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700">
+                                            <option value="straight">Straight</option>
+                                            <option value="elbow">Elbow</option>
+                                        </select>
+                                    </label>
+                                    <label class="flex items-center gap-2 text-sm font-semibold text-slate-700">
                                         <input id="noteBorderToggle" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-sky-700 focus:ring-sky-500">
                                         Rounded black border in PNG
                                     </label>
@@ -263,7 +319,10 @@
                     <div id="chartCard" class="relative rounded-2xl bg-white">
                         <div id="chartViewport" class="relative h-[860px] w-full overflow-hidden rounded-2xl">
                             <canvas id="mainChart"></canvas>
-                            <div id="chartAnnotations" class="absolute inset-0 z-10"></div>
+                            <div id="chartAnnotations" class="absolute inset-0 z-10">
+                                <svg id="chartArrowLayer" aria-hidden="true"></svg>
+                                <div id="chartNotesLayer" class="absolute inset-0"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
