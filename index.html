@@ -275,9 +275,13 @@
                                     </select>
                                 </div>
                                 <div class="flex flex-wrap items-center gap-3">
-                                    <label class="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                                        <input id="noteArrowToggle" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-sky-700 focus:ring-sky-500">
-                                        Arrow
+                                    <label for="noteArrowModeSelect" class="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                                        Pointer
+                                        <select id="noteArrowModeSelect" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700">
+                                            <option value="none">None</option>
+                                            <option value="line">Line</option>
+                                            <option value="arrow">Arrow</option>
+                                        </select>
                                     </label>
                                     <label class="flex items-center gap-2 text-sm font-semibold text-slate-700">
                                         Color

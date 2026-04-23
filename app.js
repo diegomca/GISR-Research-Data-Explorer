@@ -103,8 +103,8 @@ function initChartControls() {
     document.getElementById('noteFontSizeSelect').addEventListener('change', (event) => {
         updateSelectedNoteStyle({ fontSize: parseInt(event.target.value, 10) });
     });
-    document.getElementById('noteArrowToggle').addEventListener('change', (event) => {
-        updateSelectedNoteStyle({ arrowEnabled: event.target.checked });
+    document.getElementById('noteArrowModeSelect').addEventListener('change', (event) => {
+        updateSelectedNoteStyle({ arrowMode: event.target.value });
     });
     document.getElementById('noteArrowColorInput').addEventListener('input', (event) => {
         updateSelectedNoteStyle({ arrowColor: event.target.value });
@@ -195,7 +195,7 @@ function serializeAnnotations() {
             fontWeight: note.dataset.fontWeight || '400',
             fontStyle: note.dataset.fontStyle || 'normal',
             fontSize: parseInt(note.dataset.fontSize || '20', 10),
-            arrowEnabled: note.dataset.arrowEnabled === 'true',
+            arrowMode: note.dataset.arrowMode || 'arrow',
             arrowColor: note.dataset.arrowColor || '#111111',
             arrowWidth: parseInt(note.dataset.arrowWidth || '3', 10),
             arrowStyle: note.dataset.arrowStyle || 'straight',
@@ -645,7 +645,7 @@ function syncNoteStylePanel() {
     const boldBtn = document.getElementById('noteBoldBtn');
     const italicBtn = document.getElementById('noteItalicBtn');
     const sizeSelect = document.getElementById('noteFontSizeSelect');
-    const arrowToggle = document.getElementById('noteArrowToggle');
+    const arrowModeSelect = document.getElementById('noteArrowModeSelect');
     const arrowColorInput = document.getElementById('noteArrowColorInput');
     const arrowWidthSelect = document.getElementById('noteArrowWidthSelect');
     const arrowStyleSelect = document.getElementById('noteArrowStyleSelect');
@@ -659,7 +659,7 @@ function syncNoteStylePanel() {
         normalBtn.classList.remove('active');
         boldBtn.classList.remove('active');
         italicBtn.classList.remove('active');
-        arrowToggle.checked = false;
+        arrowModeSelect.value = 'none';
         arrowColorInput.value = '#111111';
         arrowWidthSelect.value = '3';
         arrowStyleSelect.value = 'straight';
@@ -673,14 +673,14 @@ function syncNoteStylePanel() {
     const fontSize = parseInt(selectedNote.dataset.fontSize || '20', 10);
     const isBold = (selectedNote.dataset.fontWeight || '400') === '700';
     const isItalic = (selectedNote.dataset.fontStyle || 'normal') === 'italic';
-    const hasArrow = selectedNote.dataset.arrowEnabled === 'true';
+    const arrowMode = selectedNote.dataset.arrowMode || 'arrow';
     const arrowColor = selectedNote.dataset.arrowColor || '#111111';
     const arrowWidth = selectedNote.dataset.arrowWidth || '3';
     const arrowStyle = selectedNote.dataset.arrowStyle || 'straight';
     const hasBorder = selectedNote.dataset.exportBorder === 'true';
 
     sizeSelect.value = String(fontSize);
-    arrowToggle.checked = hasArrow;
+    arrowModeSelect.value = arrowMode;
     arrowColorInput.value = arrowColor;
     arrowWidthSelect.value = arrowWidth;
     arrowStyleSelect.value = arrowStyle;
@@ -709,8 +709,8 @@ function updateSelectedNoteStyle(patch) {
     if (typeof patch.exportBorder === 'boolean') {
         selectedNote.dataset.exportBorder = String(patch.exportBorder);
     }
-    if (typeof patch.arrowEnabled === 'boolean') {
-        selectedNote.dataset.arrowEnabled = String(patch.arrowEnabled);
+    if (patch.arrowMode) {
+        selectedNote.dataset.arrowMode = patch.arrowMode;
     }
     if (patch.arrowColor) {
         selectedNote.dataset.arrowColor = patch.arrowColor;
@@ -774,6 +774,7 @@ function createAnnotationNote({
     fontWeight = '400',
     fontStyle = 'normal',
     fontSize = 20,
+    arrowMode = null,
     arrowEnabled = true,
     arrowColor = '#111111',
     arrowWidth = 3,
@@ -786,6 +787,7 @@ function createAnnotationNote({
     const notesLayer = document.getElementById('chartNotesLayer');
     const note = document.createElement('div');
     const resolvedNoteId = noteId || `note-${noteCounter++}`;
+    const resolvedArrowMode = arrowMode || (arrowEnabled ? 'arrow' : 'none');
     noteCounter = Math.max(noteCounter, extractNoteCounter(resolvedNoteId) + 1);
 
     note.className = 'chart-note';
@@ -795,7 +797,7 @@ function createAnnotationNote({
     note.dataset.fontWeight = fontWeight;
     note.dataset.fontStyle = fontStyle;
     note.dataset.fontSize = String(fontSize);
-    note.dataset.arrowEnabled = String(arrowEnabled);
+    note.dataset.arrowMode = resolvedArrowMode;
     note.dataset.arrowColor = arrowColor;
     note.dataset.arrowWidth = String(arrowWidth);
     note.dataset.arrowStyle = arrowStyle;
@@ -976,7 +978,7 @@ function updateArrowTargetsVisibility() {
             note &&
             note.isConnected &&
             selectedNote === note &&
-            note.dataset.arrowEnabled === 'true'
+            note.dataset.arrowMode !== 'none'
         );
         target.classList.toggle('visible', isVisible);
         if (note) updateArrowTargetPosition(note);
@@ -993,7 +995,7 @@ function renderArrows() {
 
     const arrowLayer = document.getElementById('chartArrowLayer');
     document.querySelectorAll('#chartNotesLayer .chart-note').forEach(note => {
-        if (note.dataset.arrowEnabled !== 'true') return;
+        if ((note.dataset.arrowMode || 'arrow') === 'none') return;
 
         const positions = getNoteAndArrowPositions(note);
         if (!positions) return;
@@ -1003,7 +1005,8 @@ function renderArrows() {
             positions.startY,
             positions.endX,
             positions.endY,
-            note.dataset.arrowStyle || 'straight'
+            note.dataset.arrowStyle || 'straight',
+            note.dataset.arrowMode || 'arrow'
         );
 
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
@@ -1016,11 +1019,13 @@ function renderArrows() {
         path.classList.add('rendered-arrow');
         arrowLayer.appendChild(path);
 
-        const arrowHead = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-        arrowHead.setAttribute('points', geometry.headPoints);
-        arrowHead.setAttribute('fill', note.dataset.arrowColor || '#111111');
-        arrowHead.classList.add('rendered-arrow');
-        arrowLayer.appendChild(arrowHead);
+        if (geometry.headPoints) {
+            const arrowHead = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+            arrowHead.setAttribute('points', geometry.headPoints);
+            arrowHead.setAttribute('fill', note.dataset.arrowColor || '#111111');
+            arrowHead.classList.add('rendered-arrow');
+            arrowLayer.appendChild(arrowHead);
+        }
     });
 
     updateArrowTargetsVisibility();
@@ -1069,28 +1074,49 @@ function getRectAnchorPoint(centerX, centerY, width, height, targetX, targetY) {
     };
 }
 
-function getArrowGeometry(startX, startY, endX, endY, style = 'straight') {
+function getArrowGeometry(startX, startY, endX, endY, style = 'straight', mode = 'arrow') {
     const sanitizedStyle = style === 'elbow' ? 'elbow' : 'straight';
+    const sanitizedMode = mode === 'line' ? 'line' : 'arrow';
+    const headLength = sanitizedMode === 'arrow' ? 20 : 0;
 
     if (sanitizedStyle === 'elbow' && Math.abs(endX - startX) > 18 && Math.abs(endY - startY) > 18) {
         const bendX = startX + ((endX - startX) * 0.58);
-        const pathData = `M ${startX} ${startY} L ${bendX} ${startY} L ${bendX} ${endY} L ${endX} ${endY}`;
-        const headPoints = getArrowHeadPoints(bendX, endY, endX, endY, 14);
+        const shaftEnd = getShaftEndPoint(bendX, endY, endX, endY, headLength);
+        const pathData = `M ${startX} ${startY} L ${bendX} ${startY} L ${bendX} ${shaftEnd.y} L ${shaftEnd.x} ${shaftEnd.y}`;
+        const headPoints = sanitizedMode === 'arrow'
+            ? getArrowHeadPoints(bendX, endY, endX, endY, headLength)
+            : null;
         return { pathData, headPoints };
     }
 
-    const pathData = `M ${startX} ${startY} L ${endX} ${endY}`;
-    const headPoints = getArrowHeadPoints(startX, startY, endX, endY, 14);
+    const shaftEnd = getShaftEndPoint(startX, startY, endX, endY, headLength);
+    const pathData = `M ${startX} ${startY} L ${shaftEnd.x} ${shaftEnd.y}`;
+    const headPoints = sanitizedMode === 'arrow'
+        ? getArrowHeadPoints(startX, startY, endX, endY, headLength)
+        : null;
     return { pathData, headPoints };
 }
 
 function getArrowHeadPoints(fromX, fromY, toX, toY, headLength = 14) {
     const angle = Math.atan2(toY - fromY, toX - fromX);
-    const leftX = toX - (headLength * Math.cos(angle - Math.PI / 7));
-    const leftY = toY - (headLength * Math.sin(angle - Math.PI / 7));
-    const rightX = toX - (headLength * Math.cos(angle + Math.PI / 7));
-    const rightY = toY - (headLength * Math.sin(angle + Math.PI / 7));
+    const spread = Math.PI / 6;
+    const leftX = toX - (headLength * Math.cos(angle - spread));
+    const leftY = toY - (headLength * Math.sin(angle - spread));
+    const rightX = toX - (headLength * Math.cos(angle + spread));
+    const rightY = toY - (headLength * Math.sin(angle + spread));
     return `${toX},${toY} ${leftX},${leftY} ${rightX},${rightY}`;
+}
+
+function getShaftEndPoint(fromX, fromY, toX, toY, headLength = 0) {
+    if (headLength <= 0) {
+        return { x: toX, y: toY };
+    }
+
+    const angle = Math.atan2(toY - fromY, toX - fromX);
+    return {
+        x: toX - (headLength * Math.cos(angle)),
+        y: toY - (headLength * Math.sin(angle))
+    };
 }
 
 function exportChartAsImage() {
@@ -1113,13 +1139,14 @@ function exportChartAsImage() {
         const positions = getNoteExportPositions(note, viewportRect, exportCanvas);
         if (!positions) return;
 
-        if (note.dataset.arrowEnabled === 'true') {
+        if ((note.dataset.arrowMode || 'arrow') !== 'none') {
             const geometry = getArrowGeometry(
                 positions.startX,
                 positions.startY,
                 positions.endX,
                 positions.endY,
-                note.dataset.arrowStyle || 'straight'
+                note.dataset.arrowStyle || 'straight',
+                note.dataset.arrowMode || 'arrow'
             );
             drawArrow(
                 ctx,
@@ -1272,14 +1299,16 @@ function drawArrow(ctx, geometry, color, width) {
     const path = new Path2D(geometry.pathData);
     ctx.stroke(path);
 
-    const points = geometry.headPoints.split(' ').map(point => point.split(',').map(Number));
-    ctx.beginPath();
-    ctx.moveTo(points[0][0], points[0][1]);
-    ctx.lineTo(points[1][0], points[1][1]);
-    ctx.lineTo(points[2][0], points[2][1]);
-    ctx.closePath();
-    ctx.stroke();
-    ctx.fill();
+    if (geometry.headPoints) {
+        const points = geometry.headPoints.split(' ').map(point => point.split(',').map(Number));
+        ctx.beginPath();
+        ctx.moveTo(points[0][0], points[0][1]);
+        ctx.lineTo(points[1][0], points[1][1]);
+        ctx.lineTo(points[2][0], points[2][1]);
+        ctx.closePath();
+        ctx.fill();
+    }
+
     ctx.restore();
 }
 
