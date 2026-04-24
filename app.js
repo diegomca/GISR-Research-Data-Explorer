@@ -73,7 +73,6 @@ document.addEventListener('DOMContentLoaded', () => {
         applyFilters();
     });
 
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
     document.addEventListener('pointermove', handleNoteDragMove);
     document.addEventListener('pointerup', stopNoteDrag);
     window.addEventListener('resize', renderArrows);
@@ -86,7 +85,6 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function initChartControls() {
-    document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscreen);
     document.getElementById('exportBtn').addEventListener('click', exportChartAsImage);
     document.getElementById('addNoteBtn').addEventListener('click', toggleAnnotationMode);
     document.getElementById('clearNotesBtn').addEventListener('click', clearAnnotations);
@@ -598,30 +596,6 @@ function renderChart(data) {
     // Apply initial filters (defaults to all checked)
     applyFilters();
     applyDisplaySettings();
-}
-
-function toggleFullscreen() {
-    const chartCard = document.getElementById('chartPanel');
-    if (!document.fullscreenElement) {
-        chartCard.requestFullscreen().catch(error => {
-            console.error('Unable to enter fullscreen mode:', error);
-        });
-        return;
-    }
-
-    document.exitFullscreen().catch(error => {
-        console.error('Unable to exit fullscreen mode:', error);
-    });
-}
-
-function handleFullscreenChange() {
-    const isFullscreen = Boolean(document.fullscreenElement);
-    document.getElementById('fullscreenBtn').textContent = isFullscreen ? 'Exit full screen' : 'Full screen';
-
-    window.setTimeout(() => {
-        if (currentChart) currentChart.resize();
-        renderArrows();
-    }, 120);
 }
 
 function toggleAnnotationMode() {
