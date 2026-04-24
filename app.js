@@ -1095,25 +1095,25 @@ function getRectAnchorPoint(centerX, centerY, width, height, targetX, targetY) {
     };
 }
 
-function getArrowGeometry(startX, startY, endX, endY, style = 'straight', mode = 'arrow') {
+function getArrowGeometry(startX, startY, endX, endY, style = 'straight', mode = 'arrow', headLength = 20) {
     const sanitizedStyle = style === 'elbow' ? 'elbow' : 'straight';
     const sanitizedMode = mode === 'line' ? 'line' : 'arrow';
-    const headLength = sanitizedMode === 'arrow' ? 20 : 0;
+    const hl = sanitizedMode === 'arrow' ? headLength : 0;
 
     if (sanitizedStyle === 'elbow' && Math.abs(endX - startX) > 18 && Math.abs(endY - startY) > 18) {
         const bendX = startX + ((endX - startX) * 0.58);
-        const shaftEnd = getShaftEndPoint(bendX, endY, endX, endY, headLength);
+        const shaftEnd = getShaftEndPoint(bendX, endY, endX, endY, hl);
         const pathData = `M ${startX} ${startY} L ${bendX} ${startY} L ${bendX} ${shaftEnd.y} L ${shaftEnd.x} ${shaftEnd.y}`;
         const headPoints = sanitizedMode === 'arrow'
-            ? getArrowHeadPoints(bendX, endY, endX, endY, headLength)
+            ? getArrowHeadPoints(bendX, endY, endX, endY, hl)
             : null;
         return { pathData, headPoints };
     }
 
-    const shaftEnd = getShaftEndPoint(startX, startY, endX, endY, headLength);
+    const shaftEnd = getShaftEndPoint(startX, startY, endX, endY, hl);
     const pathData = `M ${startX} ${startY} L ${shaftEnd.x} ${shaftEnd.y}`;
     const headPoints = sanitizedMode === 'arrow'
-        ? getArrowHeadPoints(startX, startY, endX, endY, headLength)
+        ? getArrowHeadPoints(startX, startY, endX, endY, hl)
         : null;
     return { pathData, headPoints };
 }
@@ -1143,48 +1143,87 @@ function getShaftEndPoint(fromX, fromY, toX, toY, headLength = 0) {
 async function exportChartAsImage() {
     if (!currentChart) return;
 
+    const EXPORT_SCALE = 3; // 3x for crisp high-resolution output
     const viewport = document.getElementById('chartViewport');
-
-    // Temporarily deselect note so selection outline doesn't appear in export
+    const viewportRect = viewport.getBoundingClientRect();
+    const arrowLayer = document.getElementById('chartArrowLayer');
     const prevSelected = selectedNote;
-    if (selectedNote) {
-        selectedNote.classList.remove('selected');
-        document.querySelectorAll('.chart-note-handle, .chart-note-target').forEach(el => {
-            el.style.opacity = '0';
-        });
-    }
+
+    // Hide UI chrome: selection outline, drag handles, arrow targets, and the
+    // SVG arrow layer (we'll redraw arrows manually at the correct export scale)
+    if (prevSelected) prevSelected.classList.remove('selected');
+    document.querySelectorAll('.chart-note-handle, .chart-note-target').forEach(el => {
+        el.style.opacity = '0';
+    });
+    arrowLayer.style.visibility = 'hidden';
 
     try {
-        // Use html2canvas to capture the viewport exactly as previewed
+        // Capture viewport (chart + note text boxes) at 3x resolution
         const canvas = await html2canvas(viewport, {
             backgroundColor: '#ffffff',
-            scale: 2,           // High-res export
+            scale: EXPORT_SCALE,
             useCORS: true,
             logging: false,
             allowTaint: false,
             foreignObjectRendering: false
         });
 
+        // Draw arrows manually over the captured canvas.
+        // Anchoring to `.chart-note-inner` (which has padding 2px 4px) instead of
+        // the outer `.chart-note` div gives the same visual gap as in the editor.
+        const ctx = canvas.getContext('2d');
+        const scaledHeadLength = 20 * EXPORT_SCALE;
+
+        document.querySelectorAll('#chartNotesLayer .chart-note').forEach(note => {
+            if ((note.dataset.arrowMode || 'arrow') === 'none') return;
+
+            const inner = note.querySelector('.chart-note-inner');
+            const innerRect = inner ? inner.getBoundingClientRect() : note.getBoundingClientRect();
+
+            const noteLeft   = (innerRect.left   - viewportRect.left)   * EXPORT_SCALE;
+            const noteTop    = (innerRect.top    - viewportRect.top)    * EXPORT_SCALE;
+            const noteWidth  = innerRect.width  * EXPORT_SCALE;
+            const noteHeight = innerRect.height * EXPORT_SCALE;
+            const centerX    = noteLeft + noteWidth  / 2;
+            const centerY    = noteTop  + noteHeight / 2;
+
+            const endX = (parseFloat(note.dataset.arrowXPercent) / 100) * canvas.width;
+            const endY = (parseFloat(note.dataset.arrowYPercent) / 100) * canvas.height;
+
+            const anchor   = getRectAnchorPoint(centerX, centerY, noteWidth, noteHeight, endX, endY);
+            const geometry = getArrowGeometry(
+                anchor.x, anchor.y, endX, endY,
+                note.dataset.arrowStyle || 'straight',
+                note.dataset.arrowMode  || 'arrow',
+                scaledHeadLength
+            );
+
+            const arrowWidth = parseFloat(note.dataset.arrowWidth || '3') * EXPORT_SCALE;
+            drawArrow(ctx, geometry, note.dataset.arrowColor || '#111111', arrowWidth);
+        });
+
         const link = document.createElement('a');
         link.download = `gisr-network-${currentData.network_id}-${currentSpreadModel.toLowerCase()}.png`;
         link.href = canvas.toDataURL('image/png');
         link.click();
+
     } catch (err) {
         console.error('Export failed, falling back to canvas-only export:', err);
-        // Fallback: export chart canvas only
         const chartCanvas = document.getElementById('mainChart');
         const link = document.createElement('a');
         link.download = `gisr-network-${currentData.network_id}-${currentSpreadModel.toLowerCase()}.png`;
         link.href = chartCanvas.toDataURL('image/png');
         link.click();
+
     } finally {
-        // Restore note selection state
+        // Restore everything
+        arrowLayer.style.visibility = '';
         if (prevSelected?.isConnected) {
             prevSelected.classList.add('selected');
-            document.querySelectorAll('.chart-note-handle, .chart-note-target').forEach(el => {
-                el.style.opacity = '';
-            });
         }
+        document.querySelectorAll('.chart-note-handle, .chart-note-target').forEach(el => {
+            el.style.opacity = '';
+        });
     }
 }
 
