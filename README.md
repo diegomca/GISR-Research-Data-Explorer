@@ -11,7 +11,7 @@ Article: ...
 
 DOI: ....
 
-Website: https://diegomonsalves.github.io/GISR-Research-Data-Explorer/
+Website: https://diegomca.github.io/GISR-Research-Data-Explorer/
 
 ## What the dashboard shows
 
