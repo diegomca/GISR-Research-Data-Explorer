@@ -1143,63 +1143,24 @@ function getShaftEndPoint(fromX, fromY, toX, toY, headLength = 0) {
 async function exportChartAsImage() {
     if (!currentChart) return;
 
-    const EXPORT_SCALE = 3; // 3x for crisp high-resolution output
     const viewport = document.getElementById('chartViewport');
-    const viewportRect = viewport.getBoundingClientRect();
-    const arrowLayer = document.getElementById('chartArrowLayer');
     const prevSelected = selectedNote;
 
-    // Hide UI chrome: selection outline, drag handles, arrow targets, and the
-    // SVG arrow layer (we'll redraw arrows manually at the correct export scale)
+    // Hide selection chrome so it doesn't appear in the export
     if (prevSelected) prevSelected.classList.remove('selected');
     document.querySelectorAll('.chart-note-handle, .chart-note-target').forEach(el => {
         el.style.opacity = '0';
     });
-    arrowLayer.style.visibility = 'hidden';
 
     try {
-        // Capture viewport (chart + note text boxes) at 3x resolution
+        // Capture the full viewport as rendered (chart + notes + arrows) at 3x resolution
         const canvas = await html2canvas(viewport, {
             backgroundColor: '#ffffff',
-            scale: EXPORT_SCALE,
+            scale: 3,
             useCORS: true,
             logging: false,
             allowTaint: false,
             foreignObjectRendering: false
-        });
-
-        // Draw arrows manually over the captured canvas.
-        // Anchoring to `.chart-note-inner` (which has padding 2px 4px) instead of
-        // the outer `.chart-note` div gives the same visual gap as in the editor.
-        const ctx = canvas.getContext('2d');
-        const scaledHeadLength = 20 * EXPORT_SCALE;
-
-        document.querySelectorAll('#chartNotesLayer .chart-note').forEach(note => {
-            if ((note.dataset.arrowMode || 'arrow') === 'none') return;
-
-            const inner = note.querySelector('.chart-note-inner');
-            const innerRect = inner ? inner.getBoundingClientRect() : note.getBoundingClientRect();
-
-            const noteLeft   = (innerRect.left   - viewportRect.left)   * EXPORT_SCALE;
-            const noteTop    = (innerRect.top    - viewportRect.top)    * EXPORT_SCALE;
-            const noteWidth  = innerRect.width  * EXPORT_SCALE;
-            const noteHeight = innerRect.height * EXPORT_SCALE;
-            const centerX    = noteLeft + noteWidth  / 2;
-            const centerY    = noteTop  + noteHeight / 2;
-
-            const endX = (parseFloat(note.dataset.arrowXPercent) / 100) * canvas.width;
-            const endY = (parseFloat(note.dataset.arrowYPercent) / 100) * canvas.height;
-
-            const anchor   = getRectAnchorPoint(centerX, centerY, noteWidth, noteHeight, endX, endY);
-            const geometry = getArrowGeometry(
-                anchor.x, anchor.y, endX, endY,
-                note.dataset.arrowStyle || 'straight',
-                note.dataset.arrowMode  || 'arrow',
-                scaledHeadLength
-            );
-
-            const arrowWidth = parseFloat(note.dataset.arrowWidth || '3') * EXPORT_SCALE;
-            drawArrow(ctx, geometry, note.dataset.arrowColor || '#111111', arrowWidth);
         });
 
         const link = document.createElement('a');
@@ -1216,8 +1177,6 @@ async function exportChartAsImage() {
         link.click();
 
     } finally {
-        // Restore everything
-        arrowLayer.style.visibility = '';
         if (prevSelected?.isConnected) {
             prevSelected.classList.add('selected');
         }
