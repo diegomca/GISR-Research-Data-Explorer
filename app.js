@@ -103,8 +103,19 @@ function initChartControls() {
         applyDisplaySettings();
         saveUIState();
     });
+    // Prevent blur-before-click ordering issue: when the user clicks any style
+    // button while the note body (contenteditable) has focus, mousedown fires
+    // first and can blur the note before the click/change handler runs.
+    // preventDefault() on mousedown stops the focus transfer without breaking
+    // the click event itself.
+    ['noteNormalBtn', 'noteBoldBtn', 'noteItalicBtn'].forEach(id => {
+        document.getElementById(id).addEventListener('mousedown', e => e.preventDefault());
+    });
     document.getElementById('noteNormalBtn').addEventListener('click', () => updateSelectedNoteStyle({ weight: '400' }));
-    document.getElementById('noteBoldBtn').addEventListener('click', () => updateSelectedNoteStyle({ weight: '700' }));
+    document.getElementById('noteBoldBtn').addEventListener('click', () => {
+        const isBold = selectedNote?.dataset.fontWeight === '700';
+        updateSelectedNoteStyle({ weight: isBold ? '400' : '700' });
+    });
     document.getElementById('noteItalicBtn').addEventListener('click', toggleSelectedNoteItalic);
     document.getElementById('noteFontSizeSelect').addEventListener('change', (event) => {
         updateSelectedNoteStyle({ fontSize: parseInt(event.target.value, 10) });
@@ -133,6 +144,8 @@ function initChartControls() {
             event.stopPropagation();
         }
     });
+
+
     syncControlLabels();
     syncNoteStylePanel();
 }
@@ -1127,80 +1140,52 @@ function getShaftEndPoint(fromX, fromY, toX, toY, headLength = 0) {
     };
 }
 
-function exportChartAsImage() {
+async function exportChartAsImage() {
     if (!currentChart) return;
 
-    const chartCanvas = document.getElementById('mainChart');
-    const exportCanvas = document.createElement('canvas');
-    const ctx = exportCanvas.getContext('2d');
     const viewport = document.getElementById('chartViewport');
-    const viewportRect = viewport.getBoundingClientRect();
 
-    exportCanvas.width = chartCanvas.width;
-    exportCanvas.height = chartCanvas.height;
+    // Temporarily deselect note so selection outline doesn't appear in export
+    const prevSelected = selectedNote;
+    if (selectedNote) {
+        selectedNote.classList.remove('selected');
+        document.querySelectorAll('.chart-note-handle, .chart-note-target').forEach(el => {
+            el.style.opacity = '0';
+        });
+    }
 
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
-    ctx.drawImage(chartCanvas, 0, 0, exportCanvas.width, exportCanvas.height);
+    try {
+        // Use html2canvas to capture the viewport exactly as previewed
+        const canvas = await html2canvas(viewport, {
+            backgroundColor: '#ffffff',
+            scale: 2,           // High-res export
+            useCORS: true,
+            logging: false,
+            allowTaint: false,
+            foreignObjectRendering: false
+        });
 
-    document.querySelectorAll('#chartAnnotations .chart-note').forEach(note => {
-        const positions = getNoteExportPositions(note, viewportRect, exportCanvas);
-        if (!positions) return;
-
-        if ((note.dataset.arrowMode || 'arrow') !== 'none') {
-            const geometry = getArrowGeometry(
-                positions.startX,
-                positions.startY,
-                positions.endX,
-                positions.endY,
-                note.dataset.arrowStyle || 'straight',
-                note.dataset.arrowMode || 'arrow'
-            );
-            drawArrow(
-                ctx,
-                geometry,
-                note.dataset.arrowColor || '#111111',
-                parseFloat(note.dataset.arrowWidth || '3')
-            );
+        const link = document.createElement('a');
+        link.download = `gisr-network-${currentData.network_id}-${currentSpreadModel.toLowerCase()}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+    } catch (err) {
+        console.error('Export failed, falling back to canvas-only export:', err);
+        // Fallback: export chart canvas only
+        const chartCanvas = document.getElementById('mainChart');
+        const link = document.createElement('a');
+        link.download = `gisr-network-${currentData.network_id}-${currentSpreadModel.toLowerCase()}.png`;
+        link.href = chartCanvas.toDataURL('image/png');
+        link.click();
+    } finally {
+        // Restore note selection state
+        if (prevSelected?.isConnected) {
+            prevSelected.classList.add('selected');
+            document.querySelectorAll('.chart-note-handle, .chart-note-target').forEach(el => {
+                el.style.opacity = '';
+            });
         }
-
-        const x = (parseFloat(note.dataset.xPercent) / 100) * exportCanvas.width;
-        const y = (parseFloat(note.dataset.yPercent) / 100) * exportCanvas.height;
-        const noteWidth = (note.offsetWidth / viewportRect.width) * exportCanvas.width;
-        const body = note.querySelector('.chart-note-body');
-        const text = body.innerText.trim();
-        const fontSize = Math.max(12, (parseInt(note.dataset.fontSize || '20', 10) / viewportRect.width) * exportCanvas.width);
-        const fontWeight = note.dataset.fontWeight || '400';
-        const fontStyle = note.dataset.fontStyle || 'normal';
-        const exportBorder = note.dataset.exportBorder === 'true';
-        const lineHeight = Math.max(16, fontSize * 1.25);
-        const paddingX = Math.max(8, fontSize * 0.35);
-        const paddingY = Math.max(6, fontSize * 0.28);
-
-        ctx.fillStyle = '#0f172a';
-        ctx.font = `${fontStyle} ${fontWeight} ${fontSize}px ${CHART_FONT_FAMILY}`;
-        const textBlock = measureWrappedText(ctx, text || ' ', noteWidth);
-
-        if (exportBorder) {
-            drawRoundedRect(
-                ctx,
-                x - paddingX,
-                y - paddingY,
-                textBlock.maxLineWidth + (paddingX * 2),
-                textBlock.height + (paddingY * 2),
-                14,
-                null,
-                '#000000'
-            );
-        }
-
-        drawWrappedText(ctx, textBlock.lines, x, y + fontSize, lineHeight);
-    });
-
-    const link = document.createElement('a');
-    link.download = `gisr-network-${currentData.network_id}-${currentSpreadModel.toLowerCase()}.png`;
-    link.href = exportCanvas.toDataURL('image/png');
-    link.click();
+    }
 }
 
 function drawRoundedRect(ctx, x, y, width, height, radius, fillStyle, strokeStyle = null) {
