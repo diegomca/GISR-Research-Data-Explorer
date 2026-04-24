@@ -5,7 +5,7 @@ This repository contains a static dashboard for exploring GISR (General Influenc
 - Independent Cascade (`IC`)
 - Linear Threshold (`LT`)
 
-The site is designed to be published with GitHub Pages and to serve as a companion visualization for the manuscript _Relación entre estructuras de red y su capacidad de dispersión de influencias_.
+The site is designed to be published with GitHub Pages and to serve as a companion visualization for the manuscript _....._.
 
 Article: ...
 
