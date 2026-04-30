@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,10 +9,20 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&family=Source+Serif+4:wght@600;700&display=swap"
+        rel="stylesheet">
     <style>
-        body { font-family: 'Source Sans 3', sans-serif; }
-        h1, h2, h3 { font-family: 'Source Serif 4', serif; }
+        body {
+            font-family: 'Source Sans 3', sans-serif;
+        }
+
+        h1,
+        h2,
+        h3 {
+            font-family: 'Source Serif 4', serif;
+        }
+
         .chart-note {
             position: absolute;
             min-width: 90px;
@@ -19,6 +30,7 @@
             pointer-events: auto;
             user-select: none;
         }
+
         .chart-note-inner {
             position: relative;
             display: inline-block;
@@ -27,6 +39,7 @@
             padding: 6px 12px;
             border-radius: 12px;
         }
+
         .chart-note-body {
             min-height: 28px;
             color: #0f172a;
@@ -37,10 +50,12 @@
             word-break: break-word;
             user-select: text;
         }
+
         .chart-note.selected .chart-note-inner {
             outline: 2px dashed rgba(14, 165, 233, 0.8);
             background: rgba(255, 255, 255, 0.72);
         }
+
         .chart-note-handle {
             position: absolute;
             top: -14px;
@@ -59,9 +74,11 @@
             font-size: 12px;
             line-height: 1;
         }
+
         .chart-note.selected .chart-note-handle {
             display: inline-flex;
         }
+
         .chart-note-target {
             position: absolute;
             display: none;
@@ -75,6 +92,7 @@
             cursor: crosshair;
             z-index: 5;
         }
+
         .chart-note-target::after {
             content: "";
             position: absolute;
@@ -82,9 +100,11 @@
             border-radius: 999px;
             background: #0f172a;
         }
+
         .chart-note-target.visible {
             display: block;
         }
+
         #chartArrowLayer {
             position: absolute;
             inset: 0;
@@ -93,42 +113,103 @@
             pointer-events: none;
             overflow: visible;
         }
+
         .note-style-btn.active {
             background: #0f172a;
             color: #ffffff;
             border-color: #0f172a;
         }
+
         .note-style-btn.active:hover {
             background: #1e293b;
             color: #ffffff;
             border-color: #1e293b;
         }
+
         .annotation-mode {
             cursor: crosshair;
         }
 
+        /* Correlation heatmap */
+        .corr-heatmap {
+            border-collapse: collapse;
+        }
+
+        .corr-heatmap td,
+        .corr-heatmap th {
+            border: 1px solid rgba(203, 213, 225, 0.35);
+        }
+
+        .corr-col-header {
+            writing-mode: vertical-lr;
+            transform: rotate(180deg);
+            text-align: left;
+            font-size: 13px;
+            font-weight: 600;
+            color: #475569;
+            height: 100px;
+            width: 64px;
+            vertical-align: bottom;
+            padding: 4px 10px;
+            white-space: nowrap;
+            background: #f8fafc;
+        }
+
+        .corr-row-header {
+            font-size: 13px;
+            font-weight: 600;
+            color: #475569;
+            text-align: right;
+            padding: 0 14px 0 6px;
+            white-space: nowrap;
+            background: #f8fafc;
+        }
+
+        .corr-corner {
+            background: #f8fafc;
+            width: 90px;
+        }
+
+        .corr-cell {
+            width: 64px;
+            height: 42px;
+            text-align: center;
+            font-size: 12.5px;
+            font-weight: 500;
+            cursor: default;
+            vertical-align: middle;
+            letter-spacing: -0.01em;
+        }
     </style>
 </head>
+
 <body class="min-h-screen bg-slate-100 text-slate-900">
     <div class="mx-auto max-w-[1800px] px-4 py-8 lg:px-8">
-        <header class="mb-8 rounded-3xl border border-slate-200 bg-gradient-to-r from-white via-slate-50 to-sky-50 p-6 shadow-sm">
+        <header
+            class="mb-8 rounded-3xl border border-slate-200 bg-gradient-to-r from-white via-slate-50 to-sky-50 p-6 shadow-sm">
             <div class="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
                 <div class="max-w-4xl">
-                    <p class="mb-2 text-sm font-semibold uppercase tracking-[0.18em] text-sky-700">GISR Research Data Explorer</p>
-                    <h1 class="text-3xl font-bold text-slate-950 md:text-4xl">Interactive dashboard for GISR centrality growth curves</h1>
+                    <p class="mb-2 text-sm font-semibold uppercase tracking-[0.18em] text-sky-700">GISR Research Data
+                        Explorer</p>
+                    <h1 class="text-3xl font-bold text-slate-950 md:text-4xl">Interactive dashboard for GISR centrality
+                        growth curves</h1>
                     <p class="mt-3 max-w-3xl text-base leading-7 text-slate-600">
-                        Explore the synthetic network dataset used to study how density, diameter, neighborhood depth, activation probability,
+                        Explore the synthetic network dataset used to study how density, diameter, neighborhood depth,
+                        activation probability,
                         and diffusion model shape GISR rankings.
                     </p>
                 </div>
 
                 <div class="w-full xl:max-w-md">
                     <p class="mb-3 text-sm font-medium text-slate-600">Diffusion model</p>
-                    <div class="flex rounded-2xl border border-slate-200 bg-white p-1 shadow-sm" role="group" aria-label="Diffusion model selector">
-                        <button type="button" id="modelIC" class="model-btn flex-1 rounded-xl px-4 py-3 text-sm font-semibold text-white bg-sky-700 transition-colors">
+                    <div class="flex rounded-2xl border border-slate-200 bg-white p-1 shadow-sm" role="group"
+                        aria-label="Diffusion model selector">
+                        <button type="button" id="modelIC"
+                            class="model-btn flex-1 rounded-xl px-4 py-3 text-sm font-semibold text-white bg-sky-700 transition-colors">
                             Independent Cascade (IC)
                         </button>
-                        <button type="button" id="modelLT" class="model-btn flex-1 rounded-xl px-4 py-3 text-sm font-semibold text-slate-700 transition-colors">
+                        <button type="button" id="modelLT"
+                            class="model-btn flex-1 rounded-xl px-4 py-3 text-sm font-semibold text-slate-700 transition-colors">
                             Linear Threshold (LT)
                         </button>
                     </div>
@@ -140,14 +221,17 @@
             <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm xl:col-span-2">
                 <h2 class="text-xl font-semibold text-slate-950">How to read the curves</h2>
                 <p class="mt-3 text-sm leading-7 text-slate-600">
-                    Each line sorts nodes from lower to higher GISR centrality. Informative configurations produce monotonic curves with visible
-                    variability; nearly flat curves indicate weak discrimination because most nodes concentrate near the same centrality level.
+                    Each line sorts nodes from lower to higher GISR centrality. Informative configurations produce
+                    monotonic curves with visible
+                    variability; nearly flat curves indicate weak discrimination because most nodes concentrate near the
+                    same centrality level.
                 </p>
             </article>
             <article class="rounded-2xl border border-slate-200 bg-slate-950 p-5 text-slate-100 shadow-sm">
                 <h2 class="text-xl font-semibold">Published data</h2>
                 <p class="mt-3 text-sm leading-7 text-slate-300">
-                    27 synthetic networks, 2 diffusion models, 48 parameter combinations per network-model pair, and derived curve metrics for
+                    27 synthetic networks, 2 diffusion models, 48 parameter combinations per network-model pair, and
+                    derived curve metrics for
                     comparative analysis.
                 </p>
             </article>
@@ -157,35 +241,44 @@
             <aside class="space-y-6 xl:col-span-3">
                 <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                     <label for="networkSelect" class="block text-sm font-semibold text-slate-700">Network</label>
-                    <select id="networkSelect" class="mt-3 block w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200">
+                    <select id="networkSelect"
+                        class="mt-3 block w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200">
                         <option value="">Choose a network...</option>
                     </select>
 
-                    <div id="networkInfo" class="mt-5 hidden space-y-2 border-t border-slate-100 pt-4 text-sm text-slate-600">
-                        <div class="flex justify-between gap-4"><span>Nodes</span> <span id="infoNodes" class="font-semibold text-slate-900"></span></div>
-                        <div class="flex justify-between gap-4"><span>Density</span> <span id="infoDensity" class="font-semibold text-slate-900"></span></div>
-                        <div class="flex justify-between gap-4"><span>Diameter</span> <span id="infoDiameter" class="font-semibold text-slate-900"></span></div>
+                    <div id="networkInfo"
+                        class="mt-5 hidden space-y-2 border-t border-slate-100 pt-4 text-sm text-slate-600">
+                        <div class="flex justify-between gap-4"><span>Nodes</span> <span id="infoNodes"
+                                class="font-semibold text-slate-900"></span></div>
+                        <div class="flex justify-between gap-4"><span>Density</span> <span id="infoDensity"
+                                class="font-semibold text-slate-900"></span></div>
+                        <div class="flex justify-between gap-4"><span>Diameter</span> <span id="infoDiameter"
+                                class="font-semibold text-slate-900"></span></div>
                     </div>
                 </section>
 
                 <section id="filterPanel" class="hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                     <div class="mb-4 flex items-center justify-between gap-4">
                         <h2 class="text-xl font-semibold text-slate-950">Filters</h2>
-                        <button id="resetFilters" class="text-sm font-semibold text-sky-700 hover:text-sky-900">Reset all</button>
+                        <button id="resetFilters" class="text-sm font-semibold text-sky-700 hover:text-sky-900">Reset
+                            all</button>
                     </div>
 
                     <div class="mb-6">
-                        <h3 class="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Depth level (ℓ)</h3>
+                        <h3 class="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Depth level (ℓ)
+                        </h3>
                         <div id="filterK" class="space-y-2 max-h-48 overflow-y-auto"></div>
                     </div>
 
                     <div class="mb-6">
-                        <h3 class="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Activation probability (λ)</h3>
+                        <h3 class="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Activation
+                            probability (λ)</h3>
                         <div id="filterProb" class="space-y-2 max-h-48 overflow-y-auto"></div>
                     </div>
 
                     <div>
-                        <h3 class="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Neighborhood direction</h3>
+                        <h3 class="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Neighborhood
+                            direction</h3>
                         <div id="filterDir" class="space-y-2"></div>
                     </div>
                 </section>
@@ -201,20 +294,24 @@
                             </p>
                         </div>
                         <p class="max-w-xl text-sm leading-6 text-slate-500">
-                            The x-axis orders nodes by increasing GISR value. Use the filters to isolate depth, probability, and direction settings.
+                            The x-axis orders nodes by increasing GISR value. Use the filters to isolate depth,
+                            probability, and direction settings.
                         </p>
                     </div>
 
                     <div class="mb-4 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                         <div class="flex flex-wrap gap-2">
 
-                            <button id="exportBtn" type="button" class="rounded-xl bg-sky-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-800">
+                            <button id="exportBtn" type="button"
+                                class="rounded-xl bg-sky-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-800">
                                 Export PNG
                             </button>
-                            <button id="addNoteBtn" type="button" class="rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-amber-400">
+                            <button id="addNoteBtn" type="button"
+                                class="rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-amber-400">
                                 Add note
                             </button>
-                            <button id="clearNotesBtn" type="button" class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100">
+                            <button id="clearNotesBtn" type="button"
+                                class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100">
                                 Clear notes
                             </button>
                         </div>
@@ -223,52 +320,69 @@
                             <div class="rounded-xl bg-white p-3 shadow-sm">
                                 <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Axis numbers</p>
                                 <div class="mt-2 flex items-center gap-2">
-                                    <button id="tickSizeDecrease" type="button" class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-100">A-</button>
-                                    <span id="tickSizeValue" class="min-w-12 text-center text-sm font-semibold text-slate-900">14 px</span>
-                                    <button id="tickSizeIncrease" type="button" class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-100">A+</button>
+                                    <button id="tickSizeDecrease" type="button"
+                                        class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-100">A-</button>
+                                    <span id="tickSizeValue"
+                                        class="min-w-12 text-center text-sm font-semibold text-slate-900">14 px</span>
+                                    <button id="tickSizeIncrease" type="button"
+                                        class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-100">A+</button>
                                 </div>
                             </div>
 
                             <div class="rounded-xl bg-white p-3 shadow-sm">
                                 <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Axis titles</p>
                                 <div class="mt-2 flex items-center gap-2">
-                                    <button id="axisTitleDecrease" type="button" class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-100">A-</button>
-                                    <span id="axisTitleValue" class="min-w-12 text-center text-sm font-semibold text-slate-900">18 px</span>
-                                    <button id="axisTitleIncrease" type="button" class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-100">A+</button>
+                                    <button id="axisTitleDecrease" type="button"
+                                        class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-100">A-</button>
+                                    <span id="axisTitleValue"
+                                        class="min-w-12 text-center text-sm font-semibold text-slate-900">18 px</span>
+                                    <button id="axisTitleIncrease" type="button"
+                                        class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-100">A+</button>
                                 </div>
                             </div>
 
                             <div class="rounded-xl bg-white p-3 shadow-sm">
-                                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Curve thickness</p>
+                                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Curve thickness
+                                </p>
                                 <div class="mt-2 flex items-center gap-2">
-                                    <button id="lineWidthDecrease" type="button" class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-100">-</button>
-                                    <span id="lineWidthValue" class="min-w-12 text-center text-sm font-semibold text-slate-900">1.6 px</span>
-                                    <button id="lineWidthIncrease" type="button" class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-100">+</button>
+                                    <button id="lineWidthDecrease" type="button"
+                                        class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-100">-</button>
+                                    <span id="lineWidthValue"
+                                        class="min-w-12 text-center text-sm font-semibold text-slate-900">1.6 px</span>
+                                    <button id="lineWidthIncrease" type="button"
+                                        class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-100">+</button>
                                 </div>
                             </div>
                         </div>
 
                         <div class="rounded-xl bg-white p-3 shadow-sm">
                             <label class="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                                <input id="chartTitleToggle" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-sky-700 focus:ring-sky-500" checked>
+                                <input id="chartTitleToggle" type="checkbox"
+                                    class="h-4 w-4 rounded border-slate-300 text-sky-700 focus:ring-sky-500" checked>
                                 Show chart title
                             </label>
                         </div>
 
-                        <div id="noteStylePanel" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-3 shadow-sm">
+                        <div id="noteStylePanel"
+                            class="hidden rounded-xl border border-amber-200 bg-amber-50 p-3 shadow-sm">
                             <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
                                 <div class="flex flex-wrap items-center gap-2">
-                                    <button id="noteNormalBtn" type="button" class="note-style-btn rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-100">
+                                    <button id="noteNormalBtn" type="button"
+                                        class="note-style-btn rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-100">
                                         Normal
                                     </button>
-                                    <button id="noteBoldBtn" type="button" class="note-style-btn rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-100">
+                                    <button id="noteBoldBtn" type="button"
+                                        class="note-style-btn rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-100">
                                         Bold
                                     </button>
-                                    <button id="noteItalicBtn" type="button" class="note-style-btn rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-100">
+                                    <button id="noteItalicBtn" type="button"
+                                        class="note-style-btn rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-100">
                                         Italic
                                     </button>
-                                    <label for="noteFontSizeSelect" class="ml-2 text-sm font-semibold text-slate-700">Size</label>
-                                    <select id="noteFontSizeSelect" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700">
+                                    <label for="noteFontSizeSelect"
+                                        class="ml-2 text-sm font-semibold text-slate-700">Size</label>
+                                    <select id="noteFontSizeSelect"
+                                        class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700">
                                         <option value="16">16 px</option>
                                         <option value="18">18 px</option>
                                         <option value="20">20 px</option>
@@ -279,9 +393,11 @@
                                     </select>
                                 </div>
                                 <div class="flex flex-wrap items-center gap-3">
-                                    <label for="noteArrowModeSelect" class="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                                    <label for="noteArrowModeSelect"
+                                        class="flex items-center gap-2 text-sm font-semibold text-slate-700">
                                         Pointer
-                                        <select id="noteArrowModeSelect" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700">
+                                        <select id="noteArrowModeSelect"
+                                            class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700">
                                             <option value="none">None</option>
                                             <option value="line">Line</option>
                                             <option value="arrow">Arrow</option>
@@ -289,11 +405,14 @@
                                     </label>
                                     <label class="flex items-center gap-2 text-sm font-semibold text-slate-700">
                                         Color
-                                        <input id="noteArrowColorInput" type="color" value="#111111" class="h-9 w-12 cursor-pointer rounded border border-slate-300 bg-white p-1">
+                                        <input id="noteArrowColorInput" type="color" value="#111111"
+                                            class="h-9 w-12 cursor-pointer rounded border border-slate-300 bg-white p-1">
                                     </label>
-                                    <label for="noteArrowWidthSelect" class="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                                    <label for="noteArrowWidthSelect"
+                                        class="flex items-center gap-2 text-sm font-semibold text-slate-700">
                                         Width
-                                        <select id="noteArrowWidthSelect" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700">
+                                        <select id="noteArrowWidthSelect"
+                                            class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700">
                                             <option value="2">2 px</option>
                                             <option value="3" selected>3 px</option>
                                             <option value="4">4 px</option>
@@ -301,18 +420,22 @@
                                             <option value="6">6 px</option>
                                         </select>
                                     </label>
-                                    <label for="noteArrowStyleSelect" class="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                                    <label for="noteArrowStyleSelect"
+                                        class="flex items-center gap-2 text-sm font-semibold text-slate-700">
                                         Style
-                                        <select id="noteArrowStyleSelect" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700">
+                                        <select id="noteArrowStyleSelect"
+                                            class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700">
                                             <option value="straight">Straight</option>
                                             <option value="elbow">Elbow</option>
                                         </select>
                                     </label>
                                     <label class="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                                        <input id="noteBorderToggle" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-sky-700 focus:ring-sky-500">
+                                        <input id="noteBorderToggle" type="checkbox"
+                                            class="h-4 w-4 rounded border-slate-300 text-sky-700 focus:ring-sky-500">
                                         Rounded black border in PNG
                                     </label>
-                                    <button id="deleteSelectedNoteBtn" type="button" class="rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-sm font-semibold text-rose-700 hover:bg-rose-50">
+                                    <button id="deleteSelectedNoteBtn" type="button"
+                                        class="rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-sm font-semibold text-rose-700 hover:bg-rose-50">
                                         Delete selected
                                     </button>
                                 </div>
@@ -334,11 +457,151 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Correlation matrices section -->
+
             </section>
+
         </main>
+        <section id="correlationSection" class="hidden mt-6">
+            <div
+                class="mb-4 rounded-3xl border border-slate-200 bg-gradient-to-r from-white via-slate-50 to-sky-50 p-6 shadow-sm">
+                <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                        <h2 class="text-2xl font-semibold text-slate-950">Spearman Correlation Matrices</h2>
+                        <p class="mt-1 text-sm leading-6 text-slate-600">
+                            Pairwise Spearman rank correlations between GISR centrality vectors. Use the controls to
+                            select a network, filter by depth and direction, and switch activation probability.
+                        </p>
+                    </div>
+                    <div class="flex shrink-0 flex-wrap gap-2">
+                        <button id="openAvgEvolutionBtn" type="button"
+                            class="rounded-xl bg-sky-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-800">
+                            AVG |ρ| across networks →
+                        </button>
+                        <button id="openSigMapBtn" type="button"
+                            class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+                            Significance map →
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 gap-6 xl:grid-cols-12">
+
+                <!-- Controls sidebar -->
+                <aside class="space-y-4 xl:col-span-3">
+
+                    <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                        <label for="corrNetworkSelect"
+                            class="block text-sm font-semibold text-slate-700">Network</label>
+                        <select id="corrNetworkSelect"
+                            class="mt-3 block w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200">
+                            <option value="">Choose a network...</option>
+                        </select>
+                    </div>
+
+                    <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                        <div class="mb-4 flex items-center justify-between gap-4">
+                            <h3 class="text-sm font-semibold text-slate-950">Filters</h3>
+                            <button id="corrResetFilters"
+                                class="text-sm font-semibold text-sky-700 hover:text-sky-900">Reset</button>
+                        </div>
+
+                        <div class="mb-5">
+                            <h4 class="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Depth
+                                level (ℓ)</h4>
+                            <div id="corrFilterK" class="space-y-2"></div>
+                        </div>
+
+                        <div>
+                            <h4 class="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+                                Direction</h4>
+                            <div id="corrFilterDir" class="space-y-2"></div>
+                        </div>
+                    </div>
+                </aside>
+
+                <!-- Matrix panel -->
+                <div class="xl:col-span-9">
+                    <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+
+                        <!-- Prob tabs -->
+                        <div id="corrProbTabs"
+                            class="mb-5 flex gap-1 rounded-2xl border border-slate-200 bg-slate-50 p-1" role="group"
+                            aria-label="Activation probability"></div>
+
+                        <!-- Stats -->
+                        <div class="mb-4 flex flex-wrap gap-x-6 gap-y-1 text-sm text-slate-600">
+                            <span>Samples: <strong id="corrNRows" class="text-slate-900">—</strong></span>
+                            <span>Mean |ρ| (off-diag): <strong id="corrAvg" class="text-slate-900">—</strong></span>
+                            <span>Std: <strong id="corrStd" class="text-slate-900">—</strong></span>
+                            <span>Removed: <strong id="corrRemoved" class="text-slate-900">—</strong></span>
+                        </div>
+
+                        <!-- Heatmap -->
+                        <div id="corrMatrixContainer" class="overflow-x-auto"></div>
+
+                        <!-- Cell detail panel -->
+                        <div id="corrCellDetail" class="hidden mt-5 rounded-2xl border border-sky-200 bg-sky-50 p-4">
+                            <div class="mb-3 flex items-start justify-between gap-3">
+                                <p id="corrCellDetailTitle" class="text-sm leading-6 text-slate-700"></p>
+                                <button id="corrCellDetailClose" type="button"
+                                    class="shrink-0 text-slate-400 hover:text-slate-700 text-lg leading-none">✕</button>
+                            </div>
+                            <div class="relative h-52">
+                                <canvas id="corrCellDetailChart"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Legend -->
+                        <div class="mt-5 flex flex-wrap items-center gap-3">
+                            <span class="text-xs font-semibold text-slate-500">−1</span>
+                            <div class="h-4 w-48 rounded-full"
+                                style="background: linear-gradient(to right, rgb(33,102,172), rgb(247,247,247), rgb(178,24,43))">
+                            </div>
+                            <span class="text-xs font-semibold text-slate-500">+1</span>
+                            <span class="ml-3 flex items-center gap-1.5 text-xs text-slate-400">
+                                <span class="inline-block h-3.5 w-3.5 rounded-sm bg-slate-300"></span>
+                                null / NaN (zero variance)
+                            </span>
+                        </div>
+
+                        <!-- Notes -->
+                        <div
+                            class="mt-6 space-y-2 rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm leading-7 text-slate-600">
+                            <p><strong class="text-slate-800">Note 1:</strong> Spearman's rank correlation
+                                coefficient is used. Correlations with a p-value &ge; 0.05 are marked with
+                                <strong>*</strong>.
+                            </p>
+                            <p><strong class="text-slate-800">Note 2:</strong> NaN values (displayed as
+                                <strong>—</strong>) indicate that the coefficient could not be calculated,
+                                generally because one or both vectors have zero variance (all centralities are
+                                identical), so there is not enough relative ordering to estimate monotonic
+                                association. In the JSON data, NaN values are stored as <code
+                                    class="rounded bg-slate-200 px-1 py-0.5 font-mono text-xs text-slate-700">null</code>.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Analysis modal -->
+    <div id="analysisModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" style="background:rgba(15,23,42,0.65);backdrop-filter:blur(4px)">
+        <div class="relative w-full max-w-5xl max-h-[90vh] overflow-y-auto rounded-3xl bg-white shadow-2xl">
+            <div class="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
+                <h3 id="modalTitle" class="text-xl font-semibold text-slate-950"></h3>
+                <button id="modalClose" type="button"
+                    class="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-400 hover:bg-slate-100 hover:text-slate-700 text-lg leading-none">✕</button>
+            </div>
+            <div id="modalBody" class="p-6"></div>
+        </div>
     </div>
 
     <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
     <script src="app.js"></script>
 </body>
+
 </html>

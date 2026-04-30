@@ -24,6 +24,13 @@ const BASE_COLORS = [
 
 let currentChart = null;
 let currentData = null;
+let currentCorrData = null;
+let activeCorrProb = null;
+let corrActiveK = new Set();
+let corrActiveDir = new Set();
+let modalChart = null;
+let cellDetailChart = null;
+let selectedCorrCell = null;
 let annotationMode = false;
 let noteCounter = 0;
 let activeDrag = null;
@@ -52,6 +59,7 @@ let activeFilters = {
 
 document.addEventListener('DOMContentLoaded', () => {
     initNetworkSelect();
+    initCorrNetworkSelect();
     initModelSelect();
     initChartControls();
 
@@ -64,6 +72,23 @@ document.addEventListener('DOMContentLoaded', () => {
             resetChart();
         }
     });
+
+    document.getElementById('corrNetworkSelect').addEventListener('change', (e) => {
+        const netId = e.target.value;
+        if (netId) loadCorrNetwork(netId);
+    });
+
+    document.getElementById('corrResetFilters').addEventListener('click', () => {
+        document.querySelectorAll('#corrFilterK input, #corrFilterDir input').forEach(cb => cb.checked = true);
+        updateCorrActiveFilters();
+        applyCorrFilters();
+    });
+
+    document.getElementById('openAvgEvolutionBtn').addEventListener('click', openAvgEvolutionModal);
+    document.getElementById('openSigMapBtn').addEventListener('click', openSignificanceModal);
+    document.getElementById('modalClose').addEventListener('click', closeModal);
+    document.getElementById('analysisModal').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
+    document.getElementById('corrCellDetailClose').addEventListener('click', closeCellDetail);
 
     document.getElementById('resetFilters').addEventListener('click', () => {
         if (!currentData) return;
@@ -301,6 +326,8 @@ function initModelSelect() {
         // Reload if a network is selected
         const netId = document.getElementById('networkSelect').value;
         if (netId) loadNetwork(netId);
+        const corrNetId = document.getElementById('corrNetworkSelect').value;
+        if (corrNetId && corrNetId !== netId) loadCorrNetwork(corrNetId);
     });
 
     btnLT.addEventListener('click', () => {
@@ -308,9 +335,10 @@ function initModelSelect() {
         currentSpreadModel = 'LT';
         updateBtns();
         saveUIState();
-        // Reload if a network is selected
         const netId = document.getElementById('networkSelect').value;
         if (netId) loadNetwork(netId);
+        const corrNetId = document.getElementById('corrNetworkSelect').value;
+        if (corrNetId && corrNetId !== netId) loadCorrNetwork(corrNetId);
     });
 
     updateBtns();
@@ -320,8 +348,11 @@ function resetChart() {
     if (currentChart) currentChart.destroy();
     document.getElementById('networkInfo').classList.add('hidden');
     document.getElementById('filterPanel').classList.add('hidden');
+    document.getElementById('correlationSection').classList.add('hidden');
     clearAnnotations({ persist: false });
     currentData = null;
+    currentCorrData = null;
+    activeCorrProb = null;
 }
 
 function initNetworkSelect() {
@@ -338,21 +369,36 @@ function initNetworkSelect() {
 
 async function loadNetwork(id) {
     try {
-        // Fetch from subdirectory logic
-        const response = await fetch(`${DATA_DIR}/${currentSpreadModel}/${id}.json`);
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        const data = await response.json();
+        const [curvesResp, corrResp] = await Promise.all([
+            fetch(`${DATA_DIR}/${currentSpreadModel}/${id}.json`),
+            fetch(`${DATA_DIR}/correlations/${currentSpreadModel}/${id}.json`)
+        ]);
+
+        if (!curvesResp.ok) throw new Error(`HTTP error! status: ${curvesResp.status}`);
+        const data = await curvesResp.json();
         currentData = data;
 
         updateInfo(data.params);
         initFilters(data);
         renderChart(data);
         restoreAnnotationsForCurrentChart();
+
+        // Sync corr selector to the same network on first selection
+        const corrSelect = document.getElementById('corrNetworkSelect');
+        if (!corrSelect.value) corrSelect.value = id;
+
+        if (corrResp.ok) {
+            currentCorrData = await corrResp.json();
+            initCorrSection(currentCorrData);
+        } else {
+            currentCorrData = null;
+            document.getElementById('correlationSection').classList.add('hidden');
+        }
+
         saveUIState();
 
     } catch (e) {
         console.error("Failed to load network data:", e);
-        // Clear current view
         if (currentChart) currentChart.destroy();
         currentData = null;
         alert(`Failed to load data for Network ${id} (${currentSpreadModel}). Make sure JSON files are generated in web_data/${currentSpreadModel}/.`);
@@ -1284,4 +1330,517 @@ function extractNoteCounter(noteId) {
 
 function clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
+}
+
+// ── Modal ─────────────────────────────────────────────────────────────────────
+
+function openModal(title, renderFn) {
+    if (modalChart) { modalChart.destroy(); modalChart = null; }
+    document.getElementById('modalTitle').textContent = title;
+    const body = document.getElementById('modalBody');
+    body.innerHTML = '';
+    renderFn(body);
+    const modal = document.getElementById('analysisModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function closeModal() {
+    document.getElementById('analysisModal').classList.add('hidden');
+    document.getElementById('analysisModal').classList.remove('flex');
+    if (modalChart) { modalChart.destroy(); modalChart = null; }
+}
+
+// ── Feature 1: AVG |ρ| across networks ───────────────────────────────────────
+
+async function openAvgEvolutionModal() {
+    if (!currentCorrData) return;
+    openModal(`AVG |ρ| across networks — ${currentSpreadModel} model`, body => {
+        const desc = document.createElement('div');
+        desc.className = 'mb-5 rounded-2xl border border-slate-200 bg-slate-50 px-5 py-3 text-sm leading-6 text-slate-600';
+        desc.innerHTML = `<strong class="text-slate-800">Mean |ρ| (off-diagonal)</strong> is the average of the absolute Spearman rank correlation values across all pairs of GISR centrality configurations (excluding the diagonal). A higher value indicates that the 12 configurations produce more similar node rankings within that network — suggesting that the choice of direction or depth level matters less. A lower value reflects greater diversity across configurations.`;
+        body.appendChild(desc);
+        const loading = document.createElement('p');
+        loading.className = 'text-sm text-slate-500';
+        loading.textContent = 'Loading all 27 networks…';
+        body.appendChild(loading);
+        fetchAllCorrNetworks().then(allData => {
+            loading.remove();
+
+            const probs = [0.25, 0.5, 0.75, 1.0];
+            const colors = { 0.25: 'rgb(14,165,233)', 0.5: 'rgb(16,185,129)', 0.75: 'rgb(245,158,11)', 1.0: 'rgb(239,68,68)' };
+
+            const wrapper = document.createElement('div');
+            wrapper.style.height = '420px';
+            const canvas = document.createElement('canvas');
+            wrapper.appendChild(canvas);
+            body.appendChild(wrapper);
+
+            const datasets = probs.map(prob => ({
+                label: `λ = ${prob}`,
+                data: allData.map((d, idx) => ({
+                    x: idx + 1,
+                    y: d?.correlations.find(e => e.prob === prob)?.avg ?? null
+                })),
+                borderColor: colors[prob],
+                backgroundColor: colors[prob],
+                borderWidth: 2.5,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                tension: 0.25,
+                spanGaps: false
+            }));
+
+            modalChart = new Chart(canvas, {
+                type: 'line',
+                data: { datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            type: 'linear', min: 1, max: 27,
+                            title: { display: true, text: 'Network ID', font: { size: 14, weight: '600' } },
+                            ticks: { stepSize: 1 },
+                            grid: { color: 'rgba(148,163,184,0.18)' }
+                        },
+                        y: {
+                            title: { display: true, text: 'Mean |ρ| (off-diagonal)', font: { size: 14, weight: '600' } },
+                            grid: { color: 'rgba(148,163,184,0.18)' }
+                        }
+                    },
+                    plugins: {
+                        legend: { position: 'top' },
+                        tooltip: {
+                            callbacks: {
+                                title: ctx => `Network ${ctx[0].parsed.x}`,
+                                label: ctx => `λ = ${ctx.dataset.label.split('= ')[1]}: ${ctx.parsed.y?.toFixed(4) ?? 'N/A'}`
+                            }
+                        }
+                    }
+                }
+            });
+        });
+    });
+}
+
+async function fetchAllCorrNetworks() {
+    return Promise.all(
+        Array.from({ length: TOTAL_NETWORKS }, (_, i) =>
+            fetch(`${DATA_DIR}/correlations/${currentSpreadModel}/${i + 1}.json`)
+                .then(r => r.ok ? r.json() : null).catch(() => null)
+        )
+    );
+}
+
+// ── Feature 2: Cell click → correlation profile panel ─────────────────────────
+
+function closeCellDetail() {
+    selectedCorrCell = null;
+    document.querySelectorAll('.corr-cell-selected').forEach(el => {
+        el.classList.remove('corr-cell-selected');
+        el.style.outline = '';
+        el.style.outlineOffset = '';
+    });
+    document.getElementById('corrCellDetail').classList.add('hidden');
+    if (cellDetailChart) { cellDetailChart.destroy(); cellDetailChart = null; }
+}
+
+function renderCellDetailPanel(rowIdx, colIdx, entry) {
+    const { labels, matrix, significant } = entry;
+    const rowLabel = shortCorrLabel(labels[rowIdx]);
+    const colLabel = shortCorrLabel(labels[colIdx]);
+    const rho = matrix[rowIdx][colIdx];
+    const sig = significant[rowIdx][colIdx];
+
+    // Get all filtered indices for context bars
+    const indices = labels.reduce((acc, label, i) => {
+        const m = label.match(/dir=(\w+);k=(\d+)/);
+        if (m && corrActiveDir.has(m[1]) && corrActiveK.has(parseInt(m[2]))) acc.push(i);
+        return acc;
+    }, []);
+
+    const otherIndices = indices.filter(j => j !== rowIdx);
+    const barLabels = otherIndices.map(j => shortCorrLabel(labels[j]));
+    const barValues = otherIndices.map(j => matrix[rowIdx][j]);
+    const barBg = otherIndices.map(j => {
+        if (j === colIdx) return 'rgb(14,165,233)';
+        const v = matrix[rowIdx][j];
+        return v === null ? '#e2e8f0' : corrColor(v).bg;
+    });
+    const barBorder = otherIndices.map(j => j === colIdx ? 'rgb(7,89,133)' : 'transparent');
+    const barBorderWidth = otherIndices.map(j => j === colIdx ? 2 : 0);
+
+    const sigText = rho === null ? 'NaN' : `ρ = ${rho.toFixed(4)}${sig ? '' : ' (p > 0.05)'}`;
+    document.getElementById('corrCellDetailTitle').innerHTML =
+        `Correlation profile of <strong>${rowLabel}</strong> with all other configurations &nbsp;·&nbsp; selected pair: <strong>${rowLabel} × ${colLabel}</strong> &nbsp; <span class="font-mono text-sky-700">${sigText}</span>`;
+
+    document.getElementById('corrCellDetail').classList.remove('hidden');
+
+    if (cellDetailChart) { cellDetailChart.destroy(); cellDetailChart = null; }
+
+    cellDetailChart = new Chart(document.getElementById('corrCellDetailChart'), {
+        type: 'bar',
+        data: {
+            labels: barLabels,
+            datasets: [{
+                data: barValues,
+                backgroundColor: barBg,
+                borderColor: barBorder,
+                borderWidth: barBorderWidth
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    min: -1, max: 1,
+                    title: { display: true, text: 'Spearman ρ', font: { size: 12 } },
+                    grid: { color: 'rgba(148,163,184,0.2)' }
+                },
+                x: { grid: { display: false } }
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => ctx.raw === null ? 'NaN' : `ρ = ${ctx.raw.toFixed(4)}`
+                    }
+                }
+            }
+        }
+    });
+}
+
+// ── Feature 3: Significance map modal ────────────────────────────────────────
+
+function openSignificanceModal() {
+    if (!currentCorrData) return;
+    const entry = currentCorrData.correlations.find(e => e.prob === activeCorrProb);
+    if (!entry) return;
+
+    openModal(`Significance Map — λ = ${activeCorrProb} · ${currentSpreadModel}`, body => {
+        const indices = entry.labels.reduce((acc, label, i) => {
+            const m = label.match(/dir=(\w+);k=(\d+)/);
+            if (m && corrActiveDir.has(m[1]) && corrActiveK.has(parseInt(m[2]))) acc.push(i);
+            return acc;
+        }, []);
+
+        // Count significant off-diagonal pairs
+        let total = 0, sigCount = 0;
+        indices.forEach(i => indices.forEach(j => {
+            if (i === j) return;
+            total++;
+            if (entry.significant[i][j] && entry.matrix[i][j] !== null) sigCount++;
+        }));
+        const pct = total > 0 ? ((sigCount / total) * 100).toFixed(1) : '—';
+
+        const desc = document.createElement('div');
+        desc.className = 'mb-4 rounded-2xl border border-slate-200 bg-slate-50 px-5 py-3 text-sm leading-6 text-slate-600';
+        desc.innerHTML = `<strong class="text-slate-800">Statistical significance map.</strong> Each cell indicates whether the Spearman correlation between two GISR centrality configurations is statistically significant. A pair is marked <strong>significant</strong> (p ≤ 0.05) when the probability of observing that correlation by chance is below 5%. Non-significant pairs should be interpreted with caution — the observed ρ may be noise rather than a true monotonic relationship.`;
+        body.appendChild(desc);
+
+        const summary = document.createElement('div');
+        summary.className = 'mb-5 rounded-2xl border border-sky-100 bg-sky-50 px-5 py-3 text-sm text-slate-600';
+        summary.innerHTML = `
+            <strong class="text-slate-900">${sigCount} / ${total}</strong> off-diagonal pairs are statistically significant (p ≤ 0.05)
+            &nbsp;—&nbsp; <strong class="text-slate-900">${pct}%</strong> of all tested pairs.
+            <span class="ml-3 text-slate-400">✓ = significant &nbsp; ✗ = not significant &nbsp; — = NaN</span>
+        `;
+        body.appendChild(summary);
+
+        const table = document.createElement('table');
+        table.className = 'corr-heatmap';
+
+        const thead = table.createTHead();
+        const headerRow = thead.insertRow();
+        const corner = document.createElement('th');
+        corner.className = 'corr-corner';
+        headerRow.appendChild(corner);
+        indices.forEach(i => {
+            const th = document.createElement('th');
+            th.className = 'corr-col-header';
+            th.textContent = shortCorrLabel(entry.labels[i]);
+            headerRow.appendChild(th);
+        });
+
+        const tbody = table.createTBody();
+        indices.forEach(i => {
+            const tr = tbody.insertRow();
+            const rh = document.createElement('th');
+            rh.className = 'corr-row-header';
+            rh.textContent = shortCorrLabel(entry.labels[i]);
+            tr.appendChild(rh);
+
+            indices.forEach(j => {
+                const td = tr.insertCell();
+                td.className = 'corr-cell';
+                const v = entry.matrix[i][j];
+                const sig = entry.significant[i][j];
+
+                if (i === j) {
+                    td.style.cssText = 'background:#0f172a;color:#fff;font-size:11px';
+                    td.textContent = 'diag';
+                } else if (v === null) {
+                    td.style.cssText = 'background:#e2e8f0;color:#94a3b8';
+                    td.textContent = '\u2014';
+                    td.title = 'NaN — zero variance';
+                } else if (sig) {
+                    td.style.cssText = 'background:rgb(14,165,233);color:#fff';
+                    td.textContent = '\u2713';
+                    td.title = `ρ = ${v.toFixed(4)} (p ≤ 0.05)`;
+                } else {
+                    td.style.cssText = 'background:#f8fafc;color:#cbd5e1';
+                    td.textContent = '\u2717';
+                    td.title = `ρ = ${v.toFixed(4)} (p > 0.05)`;
+                }
+            });
+        });
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'overflow-x-auto';
+        wrapper.appendChild(table);
+        body.appendChild(wrapper);
+
+        const legend = document.createElement('div');
+        legend.className = 'mt-4 flex flex-wrap gap-4 text-sm text-slate-600';
+        legend.innerHTML = `
+            <span class="flex items-center gap-1.5"><span class="inline-flex h-5 w-5 items-center justify-center rounded bg-sky-500 text-white text-xs">✓</span> Significant (p ≤ 0.05)</span>
+            <span class="flex items-center gap-1.5"><span class="inline-flex h-5 w-5 items-center justify-center rounded border border-slate-200 bg-slate-50 text-slate-300 text-xs">✗</span> Not significant</span>
+            <span class="flex items-center gap-1.5"><span class="inline-block h-5 w-5 rounded bg-slate-200"></span> NaN (zero variance)</span>
+            <span class="flex items-center gap-1.5"><span class="inline-block h-5 w-5 rounded bg-slate-900"></span> Diagonal (self)</span>
+        `;
+        body.appendChild(legend);
+    });
+}
+
+// ── Correlation matrices ──────────────────────────────────────────────────────
+
+function initCorrNetworkSelect() {
+    const select = document.getElementById('corrNetworkSelect');
+    for (let i = 1; i <= TOTAL_NETWORKS; i++) {
+        const option = document.createElement('option');
+        option.value = i;
+        option.textContent = `Network ${i}`;
+        select.appendChild(option);
+    }
+}
+
+async function loadCorrNetwork(id) {
+    try {
+        const resp = await fetch(`${DATA_DIR}/correlations/${currentSpreadModel}/${id}.json`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        currentCorrData = await resp.json();
+        initCorrSection(currentCorrData);
+    } catch (e) {
+        console.error('Failed to load correlation data:', e);
+    }
+}
+
+function initCorrSection(corrData) {
+    // Extract unique k and dir values from labels
+    const kValues = new Set();
+    const dirValues = new Set();
+    corrData.correlations[0]?.labels.forEach(label => {
+        const m = label.match(/dir=(\w+);k=(\d+)/);
+        if (m) { dirValues.add(m[1]); kValues.add(parseInt(m[2])); }
+    });
+
+    // Build filter checkboxes (only on first load or when sets change)
+    buildCorrFilterSection('corrFilterK', [...kValues].sort((a, b) => a - b), 'k');
+    buildCorrFilterSection('corrFilterDir', [...dirValues].sort(), 'dir');
+
+    // Initialize active filters to all
+    corrActiveK = new Set(kValues);
+    corrActiveDir = new Set(dirValues);
+
+    // Build prob tabs
+    const probs = corrData.correlations.map(e => e.prob);
+    const tabsContainer = document.getElementById('corrProbTabs');
+    tabsContainer.innerHTML = '';
+    probs.forEach(prob => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.dataset.prob = prob;
+        btn.textContent = `λ = ${prob}`;
+        btn.className = 'corr-prob-tab flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors text-slate-700 hover:bg-slate-100';
+        btn.addEventListener('click', () => switchCorrProb(prob));
+        tabsContainer.appendChild(btn);
+    });
+
+    const firstProb = activeCorrProb && probs.includes(activeCorrProb) ? activeCorrProb : probs[0];
+    switchCorrProb(firstProb);
+    document.getElementById('correlationSection').classList.remove('hidden');
+}
+
+function buildCorrFilterSection(containerId, values, type) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = '';
+    values.forEach(val => {
+        const div = document.createElement('div');
+        div.className = 'flex items-center';
+
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.id = `corr_${type}_${val}`;
+        input.value = val;
+        input.checked = true;
+        input.dataset.corrType = type;
+        input.className = 'h-4 w-4 cursor-pointer rounded border-slate-300 text-sky-700 focus:ring-sky-500';
+        input.addEventListener('change', () => { updateCorrActiveFilters(); applyCorrFilters(); });
+
+        const label = document.createElement('label');
+        label.htmlFor = `corr_${type}_${val}`;
+        label.className = 'ml-2 block cursor-pointer select-none text-sm text-slate-800';
+        label.textContent = val;
+
+        div.appendChild(input);
+        div.appendChild(label);
+        container.appendChild(div);
+    });
+}
+
+function updateCorrActiveFilters() {
+    corrActiveK.clear();
+    corrActiveDir.clear();
+    document.querySelectorAll('#corrFilterK input:checked').forEach(cb => corrActiveK.add(parseInt(cb.value)));
+    document.querySelectorAll('#corrFilterDir input:checked').forEach(cb => corrActiveDir.add(cb.value));
+}
+
+function applyCorrFilters() {
+    if (!currentCorrData) return;
+    closeCellDetail();
+    switchCorrProb(activeCorrProb);
+}
+
+function switchCorrProb(prob) {
+    closeCellDetail();
+    activeCorrProb = prob;
+
+    document.querySelectorAll('.corr-prob-tab').forEach(btn => {
+        const active = parseFloat(btn.dataset.prob) === prob;
+        btn.classList.toggle('bg-sky-700', active);
+        btn.classList.toggle('text-white', active);
+        btn.classList.toggle('shadow-sm', active);
+        btn.classList.toggle('text-slate-700', !active);
+    });
+
+    const entry = currentCorrData?.correlations.find(e => e.prob === prob);
+    if (!entry) return;
+
+    const container = document.getElementById('corrMatrixContainer');
+    container.innerHTML = '';
+    container.appendChild(buildCorrHeatmap(entry));
+
+    document.getElementById('corrNRows').textContent = entry.n_rows?.toLocaleString() ?? '—';
+    document.getElementById('corrAvg').textContent = entry.avg != null ? entry.avg.toFixed(4) : '—';
+    document.getElementById('corrStd').textContent = entry.std != null ? entry.std.toFixed(4) : '—';
+    document.getElementById('corrRemoved').textContent = entry.removed ?? '—';
+}
+
+function shortCorrLabel(label) {
+    const m = label.match(/dir=(\w+);k=(\d+)/);
+    return m ? `${m[1]}\u00B7${m[2]}` : label;
+}
+
+function corrColor(v) {
+    if (v === null) return { bg: '#cbd5e1', text: '#64748b' };
+    const t = Math.max(-1, Math.min(1, v));
+    let r, g, b;
+    if (t >= 0) {
+        r = Math.round(247 + t * (178 - 247));
+        g = Math.round(247 + t * (24 - 247));
+        b = Math.round(247 + t * (43 - 247));
+    } else {
+        const s = -t;
+        r = Math.round(247 + s * (33 - 247));
+        g = Math.round(247 + s * (102 - 247));
+        b = Math.round(247 + s * (172 - 247));
+    }
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return { bg: `rgb(${r},${g},${b})`, text: luminance > 0.52 ? '#0f172a' : '#ffffff' };
+}
+
+function buildCorrHeatmap(entry) {
+    const { labels, matrix, significant } = entry;
+
+    // Apply direction + k filters
+    const indices = labels.reduce((acc, label, i) => {
+        const m = label.match(/dir=(\w+);k=(\d+)/);
+        if (m && corrActiveDir.has(m[1]) && corrActiveK.has(parseInt(m[2]))) acc.push(i);
+        return acc;
+    }, []);
+
+    const filteredLabels = indices.map(i => labels[i]);
+
+    const table = document.createElement('table');
+    table.className = 'corr-heatmap';
+
+    // Column header row
+    const thead = table.createTHead();
+    const headerRow = thead.insertRow();
+    const corner = document.createElement('th');
+    corner.className = 'corr-corner';
+    headerRow.appendChild(corner);
+
+    filteredLabels.forEach(label => {
+        const th = document.createElement('th');
+        th.className = 'corr-col-header';
+        th.textContent = shortCorrLabel(label);
+        th.title = label;
+        headerRow.appendChild(th);
+    });
+
+    // Data rows
+    const tbody = table.createTBody();
+    indices.forEach(i => {
+        const rowLabel = labels[i];
+        const tr = tbody.insertRow();
+
+        const rowHeader = document.createElement('th');
+        rowHeader.className = 'corr-row-header';
+        rowHeader.textContent = shortCorrLabel(rowLabel);
+        rowHeader.title = rowLabel;
+        tr.appendChild(rowHeader);
+
+        indices.forEach(j => {
+            const v = matrix[i][j];
+            const sig = significant[i][j];
+            const { bg, text } = corrColor(v);
+
+            const td = tr.insertCell();
+            td.className = 'corr-cell';
+            td.style.backgroundColor = bg;
+            td.style.color = text;
+
+            if (v === null) {
+                td.textContent = '\u2014';
+                td.title = `${shortCorrLabel(rowLabel)} \u00D7 ${shortCorrLabel(labels[j])}: NaN \u2014 zero variance`;
+            } else {
+                const display = v.toFixed(2);
+                td.textContent = sig ? display : `${display}*`;
+                if (!sig) td.style.opacity = '0.78';
+                td.title = `${shortCorrLabel(rowLabel)} \u00D7 ${shortCorrLabel(labels[j])}: \u03C1\u202F=\u202F${v.toFixed(4)}${sig ? '' : '\u2002(p\u202F>\u202F0.05)'}`;
+            }
+
+            // Cell click → detail panel (skip diagonal)
+            if (i !== j) {
+                td.style.cursor = 'pointer';
+                td.addEventListener('click', () => {
+                    const isSame = selectedCorrCell?.i === i && selectedCorrCell?.j === j;
+                    if (isSame) { closeCellDetail(); return; }
+                    // Remove previous highlight
+                    document.querySelectorAll('.corr-cell-selected').forEach(el => el.classList.remove('corr-cell-selected'));
+                    td.classList.add('corr-cell-selected');
+                    td.style.outline = '2px solid rgb(14,165,233)';
+                    td.style.outlineOffset = '-2px';
+                    selectedCorrCell = { i, j };
+                    renderCellDetailPanel(i, j, entry);
+                });
+            }
+        });
+    });
+
+    return table;
 }
