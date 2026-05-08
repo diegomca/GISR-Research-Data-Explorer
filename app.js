@@ -102,11 +102,9 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('pointerup', stopNoteDrag);
     window.addEventListener('resize', renderArrows);
 
-    const initialNetworkId = savedUIState.selectedNetworkId || '';
-    if (initialNetworkId) {
-        document.getElementById('networkSelect').value = initialNetworkId;
-        loadNetwork(initialNetworkId);
-    }
+    const initialNetworkId = savedUIState.selectedNetworkId || '1';
+    document.getElementById('networkSelect').value = initialNetworkId;
+    loadNetwork(initialNetworkId);
 });
 
 function initChartControls() {
