@@ -198,6 +198,7 @@
                         activation probability,
                         and diffusion model shape GISR rankings.
                     </p>
+                    <p class="mt-2 text-sm text-slate-500">Work done by Fabián Riquelme, Diego Monsalves, Francisco Muñoz.</p>
                 </div>
 
                 <div class="w-full xl:max-w-md">
@@ -597,6 +598,51 @@
                     class="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-400 hover:bg-slate-100 hover:text-slate-700 text-lg leading-none">✕</button>
             </div>
             <div id="modalBody" class="p-6"></div>
+        </div>
+    </div>
+
+    <footer class="mx-auto max-w-[1800px] px-4 pb-10 pt-6 lg:px-8">
+        <div class="rounded-3xl border border-slate-200 bg-gradient-to-r from-white via-slate-50 to-sky-50 px-6 py-6 shadow-sm">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div class="max-w-3xl">
+                    <div class="flex flex-wrap items-center gap-3 mb-2">
+                        <h2 class="text-lg font-semibold text-slate-950">Cite this work</h2>
+                        <span class="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">
+                            <span class="relative flex h-2 w-2">
+                                <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75"></span>
+                                <span class="relative inline-flex h-2 w-2 rounded-full bg-amber-500"></span>
+                            </span>
+                            Scientific paper — coming soon
+                        </span>
+                    </div>
+                    <p class="text-sm leading-7 text-slate-600">
+                        F. Riquelme, D. Monsalves, F. Muñoz (2026). <em>GISR Research Data Explorer: Interactive dashboard for GISR centrality growth curves.</em>
+                        <a href="https://diegomca.github.io/GISR-Research-Data-Explorer/" target="_blank" rel="noopener" class="text-sky-700 underline hover:text-sky-900">https://diegomca.github.io/GISR-Research-Data-Explorer/</a>
+                    </p>
+                </div>
+                <button id="openCiteModalBtn" type="button"
+                    class="shrink-0 inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 active:scale-[.97]">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                    Copy citation
+                </button>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Citation modal -->
+    <div id="citeModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" style="background:rgba(15,23,42,0.65);backdrop-filter:blur(4px)">
+        <div class="relative w-full max-w-2xl rounded-3xl bg-white shadow-2xl overflow-hidden">
+            <div class="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+                <h3 class="text-lg font-semibold text-slate-950">Copy citation</h3>
+                <button id="citeModalClose" type="button"
+                    class="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-400 hover:bg-slate-100 hover:text-slate-700 text-lg leading-none transition">✕</button>
+            </div>
+            <div class="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto" id="citeModalBody">
+                <!-- Citation cards are injected by JS -->
+            </div>
+            <div class="border-t border-slate-100 px-6 py-3 bg-slate-50 text-xs text-slate-400 text-center">
+                Select a format and click the copy button to copy to clipboard.
+            </div>
         </div>
     </div>
 

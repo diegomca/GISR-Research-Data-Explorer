@@ -1842,3 +1842,112 @@ function buildCorrHeatmap(entry) {
 
     return table;
 }
+
+// ─── Citation modal ───────────────────────────────────────────────────────────
+
+const CITATION_FORMATS = [
+    {
+        id: 'apa',
+        label: 'APA 7th',
+        text: 'Riquelme, F., Monsalves, D., & Muñoz, F. (2026). GISR Research Data Explorer: Interactive dashboard for GISR centrality growth curves. https://diegomca.github.io/GISR-Research-Data-Explorer/'
+    },
+    {
+        id: 'bibtex',
+        label: 'BibTeX',
+        text: `@misc{riquelme2026gisr,
+  author       = {Riquelme, Fabi\\'an and Monsalves, Diego and Mu\\~noz, Francisco},
+  title        = {{GISR Research Data Explorer}: Interactive dashboard for {GISR} centrality growth curves},
+  year         = {2026},
+  url          = {https://diegomca.github.io/GISR-Research-Data-Explorer/},
+  note         = {Accessed: ${new Date().toISOString().slice(0, 10)}}
+}`
+    },
+    {
+        id: 'harvard',
+        label: 'Harvard',
+        text: 'Riquelme, F., Monsalves, D. and Muñoz, F. (2026) GISR Research Data Explorer: Interactive dashboard for GISR centrality growth curves. Available at: https://diegomca.github.io/GISR-Research-Data-Explorer/ (Accessed: ' + new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) + ').'
+    },
+    {
+        id: 'vancouver',
+        label: 'Vancouver',
+        text: 'Riquelme F, Monsalves D, Muñoz F. GISR Research Data Explorer: Interactive dashboard for GISR centrality growth curves [Internet]. 2026. Available from: https://diegomca.github.io/GISR-Research-Data-Explorer/'
+    },
+    {
+        id: 'chicago',
+        label: 'Chicago',
+        text: 'Riquelme, Fabián, Diego Monsalves, and Francisco Muñoz. "GISR Research Data Explorer: Interactive Dashboard for GISR Centrality Growth Curves." 2026. https://diegomca.github.io/GISR-Research-Data-Explorer/.'
+    }
+];
+
+function initCiteModal() {
+    const openBtn = document.getElementById('openCiteModalBtn');
+    const modal = document.getElementById('citeModal');
+    const closeBtn = document.getElementById('citeModalClose');
+    const body = document.getElementById('citeModalBody');
+
+    // Build citation cards
+    body.innerHTML = CITATION_FORMATS.map(fmt => `
+        <div class="rounded-xl border border-slate-200 bg-white overflow-hidden">
+            <div class="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-2.5">
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-500">${fmt.label}</span>
+                <button type="button" data-cite-id="${fmt.id}"
+                    class="cite-copy-btn inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-700 active:scale-95">
+                    <svg class="cite-icon-copy h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                    <svg class="cite-icon-check hidden h-3.5 w-3.5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                    <span class="cite-btn-label">Copy</span>
+                </button>
+            </div>
+            <pre class="px-4 py-3 text-sm leading-6 text-slate-700 whitespace-pre-wrap break-words font-mono" style="font-size:12.5px">${escapeHtml(fmt.text)}</pre>
+        </div>
+    `).join('');
+
+    // Copy handlers
+    body.querySelectorAll('.cite-copy-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const fmt = CITATION_FORMATS.find(f => f.id === btn.dataset.citeId);
+            if (!fmt) return;
+            navigator.clipboard.writeText(fmt.text).then(() => {
+                const iconCopy = btn.querySelector('.cite-icon-copy');
+                const iconCheck = btn.querySelector('.cite-icon-check');
+                const label = btn.querySelector('.cite-btn-label');
+                iconCopy.classList.add('hidden');
+                iconCheck.classList.remove('hidden');
+                label.textContent = 'Copied!';
+                btn.classList.remove('bg-slate-900', 'hover:bg-slate-700');
+                btn.classList.add('bg-emerald-600', 'hover:bg-emerald-700');
+                setTimeout(() => {
+                    iconCopy.classList.remove('hidden');
+                    iconCheck.classList.add('hidden');
+                    label.textContent = 'Copy';
+                    btn.classList.remove('bg-emerald-600', 'hover:bg-emerald-700');
+                    btn.classList.add('bg-slate-900', 'hover:bg-slate-700');
+                }, 2000);
+            });
+        });
+    });
+
+    // Open / close
+    openBtn.addEventListener('click', () => {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    });
+
+    closeBtn.addEventListener('click', closeCiteModal);
+    modal.addEventListener('click', e => { if (e.target === e.currentTarget) closeCiteModal(); });
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeCiteModal();
+    });
+}
+
+function closeCiteModal() {
+    const modal = document.getElementById('citeModal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+}
+
+function escapeHtml(str) {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// Initialize citation modal on DOM ready
+document.addEventListener('DOMContentLoaded', initCiteModal);
