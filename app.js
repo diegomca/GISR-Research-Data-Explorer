@@ -347,7 +347,7 @@ function resetChart() {
     if (currentChart) currentChart.destroy();
     document.getElementById('networkInfo').classList.add('hidden');
     document.getElementById('filterPanel').classList.add('hidden');
-    document.getElementById('ntvPanel').classList.add('hidden');
+    document.getElementById('ndiPanel').classList.add('hidden');
     document.getElementById('correlationSection').classList.add('hidden');
     clearAnnotations({ persist: false });
     currentData = null;
@@ -494,7 +494,7 @@ function applyFilters() {
     });
 
     currentChart.update();
-    renderNtvPanel();
+    renderNdiPanel();
 }
 
 function renderChart(data) {
@@ -625,10 +625,10 @@ function renderChart(data) {
                     callbacks: {
                         afterLabel: (ctx) => {
                             const curve = currentData?.curves?.[ctx.datasetIndex];
-                            const v = curve?.metrics?.ntv;
+                            const v = curve?.metrics?.ndi;
                             return (v === null || v === undefined)
-                                ? 'NTV: — (constant)'
-                                : `NTV: ${v.toFixed(3)}`;
+                                ? 'NDI: —'
+                                : `NDI (discrimination): ${v.toFixed(3)}`;
                         }
                     }
                 }
@@ -669,30 +669,33 @@ function median(values) {
     return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
-// Maps t in [0,1] (uniform -> concentrated) to the sky -> amber -> rose scale.
-function ntvColor(t) {
+// Maps t in [0,1] (low -> high NDI) to a slate -> sky -> emerald ramp.
+function ndiColor(t) {
     const lerp = (a, b, u) => Math.round(a + (b - a) * u);
     let r, g, b;
     if (t < 0.5) {
-        const u = t / 0.5;
-        r = lerp(2, 245, u); g = lerp(132, 158, u); b = lerp(199, 11, u);
+        const u = t / 0.5;            // slate-400 -> sky-500
+        r = lerp(148, 14, u); g = lerp(163, 165, u); b = lerp(184, 233, u);
     } else {
-        const u = (t - 0.5) / 0.5;
-        r = lerp(245, 225, u); g = lerp(158, 29, u); b = lerp(11, 72, u);
+        const u = (t - 0.5) / 0.5;    // sky-500 -> emerald-500
+        r = lerp(14, 16, u); g = lerp(165, 185, u); b = lerp(233, 129, u);
     }
     return `rgb(${r}, ${g}, ${b})`;
 }
 
-// Renders the per-curve NTV readout for the currently visible (filtered) curves.
-function renderNtvPanel() {
-    const panel = document.getElementById('ntvPanel');
+// NDI value that fills the bar completely (~ the best discrimination achievable in this dataset).
+const NDI_BAR_REF = 0.30;
+
+// Renders the per-curve NDI readout for the currently visible (filtered) curves.
+function renderNdiPanel() {
+    const panel = document.getElementById('ndiPanel');
     if (!panel) return;
     if (!currentData) {
         panel.classList.add('hidden');
         return;
     }
 
-    const list = document.getElementById('ntvList');
+    const list = document.getElementById('ndiList');
     list.innerHTML = '';
 
     const items = [];
@@ -701,51 +704,35 @@ function renderNtvPanel() {
             activeFilters.prob.has(curve.prob) &&
             activeFilters.dir.has(curve.dir);
         if (!visible) return;
-        const ntv = curve.metrics ? curve.metrics.ntv : null;
-        items.push({ index, curve, ntv });
+        const ndi = curve.metrics ? curve.metrics.ndi : null;
+        items.push({ index, curve, ndi });
     });
 
-    // Most concentrated first; constant (undefined) curves sink to the bottom.
-    items.sort((a, b) => {
-        const an = (a.ntv === null || a.ntv === undefined);
-        const bn = (b.ntv === null || b.ntv === undefined);
-        if (an && bn) return 0;
-        if (an) return 1;
-        if (bn) return -1;
-        return b.ntv - a.ntv;
-    });
+    // Most discriminative (highest NDI) first.
+    items.sort((a, b) => (b.ndi ?? -1) - (a.ndi ?? -1));
 
-    const defined = items.filter(it => it.ntv !== null && it.ntv !== undefined).map(it => it.ntv);
-    document.getElementById('ntvCount').textContent = items.length;
-    document.getElementById('ntvMedian').textContent = defined.length ? median(defined).toFixed(3) : '—';
-    document.getElementById('ntvConstant').textContent = items.length - defined.length;
-
-    const MAX_NTV = Math.SQRT2;
+    const defined = items.filter(it => it.ndi !== null && it.ndi !== undefined).map(it => it.ndi);
+    document.getElementById('ndiCount').textContent = items.length;
+    document.getElementById('ndiMedian').textContent = defined.length ? median(defined).toFixed(3) : '—';
+    document.getElementById('ndiMax').textContent = defined.length ? Math.max(...defined).toFixed(3) : '—';
 
     items.forEach(it => {
         const row = document.createElement('div');
-        row.className = 'ntv-row flex items-center gap-3 rounded-xl px-3 py-2 transition hover:bg-slate-50';
+        row.className = 'ndi-row flex items-center gap-3 rounded-xl px-3 py-2 transition hover:bg-slate-50';
         row.dataset.curveIndex = it.index;
         const color = curveColors[it.index] || '#94a3b8';
         const label = `ℓ=${it.curve.k} · λ=${it.curve.prob} · ${it.curve.dir}`;
+        const v = (it.ndi === null || it.ndi === undefined) ? 0 : it.ndi;
+        const t = Math.max(0, Math.min(1, v / NDI_BAR_REF));
+        const barColor = ndiColor(t);
 
-        if (it.ntv === null || it.ntv === undefined) {
-            row.innerHTML = `
-                <span class="h-3 w-3 shrink-0 rounded-sm opacity-40" style="background:${color}"></span>
-                <span class="w-44 shrink-0 truncate text-sm font-medium text-slate-400">${label}</span>
-                <div class="flex-1"><span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">constant</span></div>
-                <span class="w-14 shrink-0 text-right text-sm font-semibold text-slate-300">—</span>`;
-        } else {
-            const t = Math.max(0, Math.min(1, (it.ntv - 1) / (MAX_NTV - 1)));
-            const barColor = ntvColor(t);
-            row.innerHTML = `
-                <span class="h-3 w-3 shrink-0 rounded-sm" style="background:${color}"></span>
-                <span class="w-44 shrink-0 truncate text-sm font-medium text-slate-700">${label}</span>
-                <div class="relative h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
-                    <div class="absolute inset-y-0 left-0 rounded-full" style="width:${(t * 100).toFixed(1)}%;background:${barColor}"></div>
-                </div>
-                <span class="w-14 shrink-0 text-right text-sm font-semibold tabular-nums text-slate-900">${it.ntv.toFixed(3)}</span>`;
-        }
+        row.innerHTML = `
+            <span class="h-3 w-3 shrink-0 rounded-sm" style="background:${color}"></span>
+            <span class="w-44 shrink-0 truncate text-sm font-medium text-slate-700">${label}</span>
+            <div class="relative h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
+                <div class="absolute inset-y-0 left-0 rounded-full" style="width:${(t * 100).toFixed(1)}%;background:${barColor}"></div>
+            </div>
+            <span class="w-14 shrink-0 text-right text-sm font-semibold tabular-nums text-slate-900">${v.toFixed(3)}</span>`;
 
         row.addEventListener('mouseenter', () => highlightCurve(it.index));
         row.addEventListener('mouseleave', clearHighlight);

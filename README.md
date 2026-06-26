@@ -70,7 +70,7 @@ Each element of `curves` contains:
 - `metrics.rmse_diag`: RMSE relative to the diagonal baseline
 - `metrics.r2_lin`: linear fit quality of the growth curve
 - `metrics.curvature_c_abs`: absolute curvature indicator
-- `metrics.ntv`: normalized total variation of the growth curve in the (rank, value) plane (binned arc length, 100 bins, normalized by the endpoint diagonal). `1.0` denotes perfectly uniform growth; higher values (up to `√2`) indicate growth concentrated in subregions of the domain. `null` for constant curves (zero range, undefined).
+- `metrics.ndi`: normalized diversity index (NDI) — the effective fraction of distinct GISR levels, `exp(H)/n`, where `H` is the Shannon entropy of the curve's value distribution (Hill number of order 1, normalized by the number of nodes). Ranges in `(0, 1]`; **higher means more discriminative**: the curve assigns many distinct values spread smoothly across nodes (diverse, continuous growth). Values near `0` indicate that most nodes share the same value (flat, saturated, or explosive curves with little discriminative power).
 - `metrics.gisr_min`, `gisr_q25`, `gisr_median`, `gisr_q75`, `gisr_max`: summary statistics used in the distribution panel
 
 ## Interpreting the growth curves
