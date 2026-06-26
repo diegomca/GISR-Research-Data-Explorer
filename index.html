@@ -459,6 +459,48 @@
                     </div>
                 </div>
 
+                <!-- Growth profile (NTV) panel -->
+                <div id="ntvPanel" class="mt-6 hidden rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                        <div>
+                            <div class="flex items-center gap-3">
+                                <h2 class="text-2xl font-semibold text-slate-950">Growth profile</h2>
+                                <span
+                                    class="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-[0.12em] text-sky-700">NTV</span>
+                            </div>
+                            <p class="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
+                                Normalized total variation of each growth curve in the (rank, value) plane.
+                                <strong class="text-slate-800">1.00</strong> = perfectly uniform growth (smooth
+                                diagonal); higher means the growth is concentrated in subregions of the domain (more
+                                heterogeneous). Constant curves are undefined.
+                            </p>
+                        </div>
+                        <div class="w-full max-w-xs shrink-0">
+                            <div class="h-2.5 w-full rounded-full"
+                                style="background:linear-gradient(90deg, rgb(2,132,199), rgb(245,158,11), rgb(225,29,72))">
+                            </div>
+                            <div
+                                class="mt-1 flex justify-between text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                                <span>1.00 · uniform</span>
+                                <span>√2 · concentrated</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 flex flex-wrap gap-x-6 gap-y-1 text-sm text-slate-600">
+                        <span>Curves shown: <strong id="ntvCount" class="text-slate-900">—</strong></span>
+                        <span>Median NTV: <strong id="ntvMedian" class="text-slate-900">—</strong></span>
+                        <span>Constant (undefined): <strong id="ntvConstant" class="text-slate-900">—</strong></span>
+                    </div>
+
+                    <div id="ntvList" class="mt-4 max-h-[520px] space-y-1.5 overflow-y-auto pr-1"></div>
+
+                    <p class="mt-3 text-xs leading-5 text-slate-400">
+                        Sorted by NTV (most concentrated first). Hover a row to highlight its curve above. Updates with
+                        the depth, probability, and direction filters.
+                    </p>
+                </div>
+
                 <!-- Correlation matrices section -->
 
             </section>

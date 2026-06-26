@@ -23,6 +23,7 @@ const BASE_COLORS = [
 ];
 
 let currentChart = null;
+let curveColors = [];
 let currentData = null;
 let currentCorrData = null;
 let activeCorrProb = null;
@@ -346,6 +347,7 @@ function resetChart() {
     if (currentChart) currentChart.destroy();
     document.getElementById('networkInfo').classList.add('hidden');
     document.getElementById('filterPanel').classList.add('hidden');
+    document.getElementById('ntvPanel').classList.add('hidden');
     document.getElementById('correlationSection').classList.add('hidden');
     clearAnnotations({ persist: false });
     currentData = null;
@@ -492,6 +494,7 @@ function applyFilters() {
     });
 
     currentChart.update();
+    renderNtvPanel();
 }
 
 function renderChart(data) {
@@ -507,24 +510,16 @@ function renderChart(data) {
     // The JSON array 'curves' is already sorted by the python script.
 
     // We need to replicate the color cycling logic per K-group
-    let datasets = [];
-    let currentK = null;
-    let colorIndex = 0;
+    curveColors = assignCurveColors(data.curves);
 
-    data.curves.forEach((curve, index) => {
-        if (currentK === null || currentK !== curve.k) {
-            currentK = curve.k;
-            colorIndex = 0;
-        }
-
-        const color = BASE_COLORS[colorIndex % BASE_COLORS.length];
-        colorIndex++;
+    const datasets = data.curves.map((curve, index) => {
+        const color = curveColors[index];
 
         // Construct label
         // Python: f"{index}: k={k}, λ={prob}, dir={dir} ..."
         const label = `${index + 1}: ℓ=${curve.k}, λ=${curve.prob}, dir=${curve.dir}`;
 
-        datasets.push({
+        return {
             label: label,
             data: curve.data.map((y, i) => ({ x: i + 1, y: y })), // Format for scatter/linear
             borderColor: color,
@@ -534,7 +529,7 @@ function renderChart(data) {
             pointHoverRadius: 4,
             fill: false,
             tension: 0 // Straight lines between points
-        });
+        };
     });
 
     currentChart = new Chart(ctx, {
@@ -626,7 +621,16 @@ function renderChart(data) {
                     bodyFont: {
                         size: 13
                     },
-                    padding: 12
+                    padding: 12,
+                    callbacks: {
+                        afterLabel: (ctx) => {
+                            const curve = currentData?.curves?.[ctx.datasetIndex];
+                            const v = curve?.metrics?.ntv;
+                            return (v === null || v === undefined)
+                                ? 'NTV: — (constant)'
+                                : `NTV: ${v.toFixed(3)}`;
+                        }
+                    }
                 }
             },
             interaction: {
@@ -640,6 +644,142 @@ function renderChart(data) {
     // Apply initial filters (defaults to all checked)
     applyFilters();
     applyDisplaySettings();
+}
+
+// Replicates the per-K color cycling so the NTV panel swatches match the chart lines.
+function assignCurveColors(curves) {
+    const colors = [];
+    let currentK = null;
+    let colorIndex = 0;
+    curves.forEach(curve => {
+        if (currentK === null || currentK !== curve.k) {
+            currentK = curve.k;
+            colorIndex = 0;
+        }
+        colors.push(BASE_COLORS[colorIndex % BASE_COLORS.length]);
+        colorIndex++;
+    });
+    return colors;
+}
+
+function median(values) {
+    if (!values.length) return null;
+    const sorted = [...values].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+// Maps t in [0,1] (uniform -> concentrated) to the sky -> amber -> rose scale.
+function ntvColor(t) {
+    const lerp = (a, b, u) => Math.round(a + (b - a) * u);
+    let r, g, b;
+    if (t < 0.5) {
+        const u = t / 0.5;
+        r = lerp(2, 245, u); g = lerp(132, 158, u); b = lerp(199, 11, u);
+    } else {
+        const u = (t - 0.5) / 0.5;
+        r = lerp(245, 225, u); g = lerp(158, 29, u); b = lerp(11, 72, u);
+    }
+    return `rgb(${r}, ${g}, ${b})`;
+}
+
+// Renders the per-curve NTV readout for the currently visible (filtered) curves.
+function renderNtvPanel() {
+    const panel = document.getElementById('ntvPanel');
+    if (!panel) return;
+    if (!currentData) {
+        panel.classList.add('hidden');
+        return;
+    }
+
+    const list = document.getElementById('ntvList');
+    list.innerHTML = '';
+
+    const items = [];
+    currentData.curves.forEach((curve, index) => {
+        const visible = activeFilters.k.has(curve.k) &&
+            activeFilters.prob.has(curve.prob) &&
+            activeFilters.dir.has(curve.dir);
+        if (!visible) return;
+        const ntv = curve.metrics ? curve.metrics.ntv : null;
+        items.push({ index, curve, ntv });
+    });
+
+    // Most concentrated first; constant (undefined) curves sink to the bottom.
+    items.sort((a, b) => {
+        const an = (a.ntv === null || a.ntv === undefined);
+        const bn = (b.ntv === null || b.ntv === undefined);
+        if (an && bn) return 0;
+        if (an) return 1;
+        if (bn) return -1;
+        return b.ntv - a.ntv;
+    });
+
+    const defined = items.filter(it => it.ntv !== null && it.ntv !== undefined).map(it => it.ntv);
+    document.getElementById('ntvCount').textContent = items.length;
+    document.getElementById('ntvMedian').textContent = defined.length ? median(defined).toFixed(3) : '—';
+    document.getElementById('ntvConstant').textContent = items.length - defined.length;
+
+    const MAX_NTV = Math.SQRT2;
+
+    items.forEach(it => {
+        const row = document.createElement('div');
+        row.className = 'ntv-row flex items-center gap-3 rounded-xl px-3 py-2 transition hover:bg-slate-50';
+        row.dataset.curveIndex = it.index;
+        const color = curveColors[it.index] || '#94a3b8';
+        const label = `ℓ=${it.curve.k} · λ=${it.curve.prob} · ${it.curve.dir}`;
+
+        if (it.ntv === null || it.ntv === undefined) {
+            row.innerHTML = `
+                <span class="h-3 w-3 shrink-0 rounded-sm opacity-40" style="background:${color}"></span>
+                <span class="w-44 shrink-0 truncate text-sm font-medium text-slate-400">${label}</span>
+                <div class="flex-1"><span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">constant</span></div>
+                <span class="w-14 shrink-0 text-right text-sm font-semibold text-slate-300">—</span>`;
+        } else {
+            const t = Math.max(0, Math.min(1, (it.ntv - 1) / (MAX_NTV - 1)));
+            const barColor = ntvColor(t);
+            row.innerHTML = `
+                <span class="h-3 w-3 shrink-0 rounded-sm" style="background:${color}"></span>
+                <span class="w-44 shrink-0 truncate text-sm font-medium text-slate-700">${label}</span>
+                <div class="relative h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
+                    <div class="absolute inset-y-0 left-0 rounded-full" style="width:${(t * 100).toFixed(1)}%;background:${barColor}"></div>
+                </div>
+                <span class="w-14 shrink-0 text-right text-sm font-semibold tabular-nums text-slate-900">${it.ntv.toFixed(3)}</span>`;
+        }
+
+        row.addEventListener('mouseenter', () => highlightCurve(it.index));
+        row.addEventListener('mouseleave', clearHighlight);
+        list.appendChild(row);
+    });
+
+    panel.classList.remove('hidden');
+}
+
+// Emphasizes a single curve in the chart while dimming the rest (panel hover).
+function highlightCurve(idx) {
+    if (!currentChart) return;
+    currentChart.data.datasets.forEach((ds, i) => {
+        if (i === idx) {
+            ds.borderColor = curveColors[i];
+            ds.borderWidth = Math.max(3, displaySettings.lineWidth + 1.5);
+            ds.order = 1;
+        } else {
+            ds.borderColor = 'rgba(148, 163, 184, 0.18)';
+            ds.order = 0;
+        }
+    });
+    currentChart.update('none');
+}
+
+function clearHighlight() {
+    if (!currentChart) return;
+    currentChart.data.datasets.forEach((ds, i) => {
+        ds.borderColor = curveColors[i];
+        ds.backgroundColor = curveColors[i];
+        ds.borderWidth = displaySettings.lineWidth;
+        ds.order = 0;
+    });
+    currentChart.update('none');
 }
 
 function toggleAnnotationMode() {
